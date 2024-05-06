@@ -1,0 +1,39 @@
+<!-- user_item.xml -->
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    >
+
+    <data>
+        <variable
+            name="user"
+            type="com.example.chaqmoq.model.User" />
+    </data>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp">
+
+        <ImageView
+            android:id="@+id/imageViewProfile"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:contentDescription="no description"
+            android:scaleType="centerCrop"
+            android:layout_marginEnd="8dp" />
+
+        <TextView
+            android:id="@+id/userNameTextView"
+            android:layout_width="307dp"
+            android:textColorHint="@color/black"
+            android:layout_height="wrap_content"
+            android:padding="8dp"
+            android:text="@{user.username}"
+            android:textColor="@android:color/black"
+            android:textSize="18sp"
+            tools:text="John Doe" />
+
+        <!-- Add more views here to display additional user information -->
+    </LinearLayout>
+</layout>
