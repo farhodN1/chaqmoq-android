@@ -1,5 +1,7 @@
 package com.example.chaqmoq.adapter
 
+import android.content.SharedPreferences
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -11,7 +13,7 @@ import com.example.chaqmoq.databinding.UserItemBinding
 import com.example.chaqmoq.model.User
 import com.bumptech.glide.Glide
 
-class UserListAdapter(private val onItemClick: (User) -> Unit) : ListAdapter<User, UserListAdapter.UserViewHolder>(UserDiffCallback()) {
+class UserListAdapter(private val userData: SharedPreferences, private val onItemClick: (User) -> Unit) : ListAdapter<User, UserListAdapter.UserViewHolder>(UserDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): UserViewHolder {
         val binding = UserItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -19,7 +21,14 @@ class UserListAdapter(private val onItemClick: (User) -> Unit) : ListAdapter<Use
     }
 
     override fun onBindViewHolder(holder: UserViewHolder, position: Int) {
+        val hostId = userData.getString("nickname", null)
         val user = getItem(position)
+
+        // Skip binding if the user is the host
+        if (user.id == hostId) {
+            return
+        }
+
         holder.bind(user)
     }
 

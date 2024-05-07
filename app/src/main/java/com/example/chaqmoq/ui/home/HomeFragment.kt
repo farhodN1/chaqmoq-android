@@ -1,5 +1,7 @@
 package com.example.chaqmoq.ui.home
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
 import com.example.chaqmoq.R
@@ -21,6 +23,14 @@ class HomeFragment : Fragment() {
     private val binding get() = _binding!!
     private lateinit var userListAdapter: UserListAdapter
 
+    private val hostData: SharedPreferences by lazy {
+        requireActivity().getSharedPreferences("UserInfo", Context.MODE_PRIVATE)
+    }
+
+    private val sharedPreferences: SharedPreferences by lazy {
+        requireActivity().getSharedPreferences("TargetInfo", Context.MODE_PRIVATE)
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -29,13 +39,21 @@ class HomeFragment : Fragment() {
         homeViewModel = ViewModelProvider(this).get(HomeViewModel::class.java)
         _binding = FragmentHomeBinding.inflate(inflater, container, false)
         val root: View = binding.root
-//        val isAuthenticated = MainActivity.sharedPrefs.getBoolean("is_authenticated", false)
-//        Log.i("auth", isAuthenticated.toString());
         val recyclerView: RecyclerView = binding.recyclerView
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
-        userListAdapter = UserListAdapter{user ->
+        userListAdapter = UserListAdapter(hostData){user ->
             Log.d("HomeFragment", "Clicked user: ${user.username}")
             findNavController().navigate(R.id.target_user)
+
+            with(sharedPreferences.edit()) {
+                putString("id", user.id)
+                putString("username", user.username)
+                putString("email", user.email)
+                putString("pictureURL", user.profilePicture)
+                putString("socket_id", user.socket_id)
+                putString("status", user.status)
+                apply()
+            }
         }
         recyclerView.adapter = userListAdapter
 

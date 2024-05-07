@@ -8,12 +8,9 @@ import android.util.Log
 import com.example.chaqmoq.model.User
 import com.example.chaqmoq.network.MyHTTPClient
 import kotlinx.coroutines.launch
-import org.json.JSONObject
 import org.json.JSONException
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 
 class HomeViewModel : ViewModel() {
@@ -34,7 +31,7 @@ class HomeViewModel : ViewModel() {
     fun makeNetworkRequest() {
         viewModelScope.launch {
             try {
-                val response = myHttpClient.getRequest("http://192.168.41.168:5000/userlist")
+                val response = myHttpClient.getRequest("http://192.168.78.168:5000/userlist")
                 val usersMap: Map<String, User> = Gson().fromJson(response, object : TypeToken<Map<String, User>>() {}.type)
                 val userList: List<User> = usersMap.values.toList()
                 _userList.postValue(userList)

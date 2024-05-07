@@ -17,20 +17,15 @@ class TargetUserViewModel : ViewModel() {
     private val _messageList = MutableLiveData<List<Message>>()
     val messageList: LiveData<List<Message>> get() = _messageList
 
-    val editTextValue = MutableLiveData<String>()
-
-    fun onEditTextChanged(newValue: String) {
-        editTextValue.value = newValue
-    }
 
     init {
         makeNetworkRequest()
     }
 
     fun makeNetworkRequest() {
-        val url = "http://192.168.41.168:5000/messages"
-        val message = "027aaaaddeeffgghhhhiinnoorrvv"
-        val requestBody = "{\"message\": \"$message\"}"
+        val url = "http://192.168.78.168:5000/messages"
+        val conId = "027aaaaddeeffgghhhhiinnoorrvv"
+        val requestBody = "{\"conId\": \"$conId\"}"
         viewModelScope.launch {
             try {
                 val response = myHttpClient.postRequest(url, requestBody)

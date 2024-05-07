@@ -3,6 +3,7 @@ package com.example.chaqmoq.ui.targetUser
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Bundle
+import android.text.Editable
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -13,19 +14,23 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.chaqmoq.adapter.MessageListAdapter
+import com.example.chaqmoq.model.Message
 import com.example.chaqmoq.databinding.TargetUserBinding
 import io.socket.client.IO
 import io.socket.client.Socket
-
+import org.json.JSONObject
 
 class TargetUserFragment : Fragment(){
 
     private var _binding: TargetUserBinding? = null
-    val socket: Socket = IO.socket("http://192.168.41.168:5000")
+    val socket: Socket = IO.socket("http://192.168.78.168:5000")
     private val binding get() = _binding!!
     private lateinit var messageListAdapter: MessageListAdapter
-    private val sharedPreferences: SharedPreferences by lazy {
+    private val hostData: SharedPreferences by lazy {
         requireActivity().getSharedPreferences("UserInfo", Context.MODE_PRIVATE)
+    }
+    private val targetData: SharedPreferences by lazy {
+        requireActivity().getSharedPreferences("TargetInfo", Context.MODE_PRIVATE)
     }
 
     override fun onCreateView(
@@ -41,38 +46,47 @@ class TargetUserFragment : Fragment(){
 
         val recyclerView: RecyclerView = binding.recyclerView
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
-        messageListAdapter = MessageListAdapter(sharedPreferences)
+        messageListAdapter = MessageListAdapter(hostData)
         binding.sendButton.setOnClickListener{sendMessage()}
 
         socket.connect()
         socket.on(Socket.EVENT_CONNECT) {
-            // Handle connection
+            Log.i("on connect", "successful")
         }
 
         socket.on(Socket.EVENT_DISCONNECT) {
-            // Handle disconnection
+            Log.i("disconnect", "server is down")
         }
 
-        socket.on("customEvent") { args ->
-
+        socket.on("private message") {
+            targetUserViewModel.makeNetworkRequest()
         }
-        socket.emit("eventName", )
         recyclerView.adapter = messageListAdapter
 
         targetUserViewModel.messageList.observe(viewLifecycleOwner) { messageList ->
             messageListAdapter.submitList(messageList)
         }
         return root
-        val socket: Socket = IO.socket("http://192.168.41.168:5000")
-        socket.connect()
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
+        socket.disconnect()
     }
     fun sendMessage(){
-//        socket.emit("private message", )
-        Log.i("hi", binding.messageEditText.text.toString())
+        val targetId = targetData.getString("id", null)
+        val targetEmail = targetData.getString("email", null)
+        val targetPictureURL = targetData.getString("pictureURL", null)
+        val hostId = hostData.getString("nickname", null)
+        val sender = hostId
+        val recipient = targetId
+        val message = binding.messageEditText.text.toString()
+        val jsonObject = JSONObject()
+        jsonObject.put("sender", sender)
+        jsonObject.put("recipient", recipient)
+        jsonObject.put("message", message)
+        socket.emit("private message", jsonObject)
+        binding.messageEditText.text = Editable.Factory.getInstance().newEditable("")
     }
 }
