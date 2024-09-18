@@ -31,7 +31,7 @@ class HomeViewModel : ViewModel() {
     fun makeNetworkRequest() {
         viewModelScope.launch {
             try {
-                val response = myHttpClient.getRequest("http://192.168.78.168:5000/userlist")
+                val response = myHttpClient.getRequest("http://192.168.222.115:5000/userlist")
                 val usersMap: Map<String, User> = Gson().fromJson(response, object : TypeToken<Map<String, User>>() {}.type)
                 val userList: List<User> = usersMap.values.toList()
                 _userList.postValue(userList)
