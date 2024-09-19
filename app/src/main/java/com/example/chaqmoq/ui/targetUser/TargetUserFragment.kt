@@ -17,6 +17,7 @@ import com.google.gson.Gson
 import com.example.chaqmoq.databinding.TargetUserBinding
 import io.socket.client.IO
 import io.socket.client.Socket
+import org.json.JSONArray
 import org.json.JSONObject
 import org.webrtc.*
 
@@ -26,7 +27,7 @@ class TargetUserFragment : Fragment(){
     lateinit var peerConnection: PeerConnection
     val eglBase = EglBase.create()
     private var _binding: TargetUserBinding? = null
-    val socket: Socket = IO.socket("http://192.168.222.115:5000")
+    val socket: Socket = IO.socket("http://192.168.130.138:5000")
     private val binding get() = _binding!!
     private lateinit var messageListAdapter: MessageListAdapter
     private val hostData: SharedPreferences by lazy {
@@ -72,15 +73,17 @@ class TargetUserFragment : Fragment(){
         initializePeerConnectionFactory()
         initializePeerConnection()
         onSocketConnection()
-//        createOffer()
+        createOffer()
         return root
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
+        peerConnection?.close()
         _binding = null
         socket.disconnect()
     }
+
     fun sendMessage(){
         val targetId = targetData.getString("id", null)
         val targetEmail = targetData.getString("email", null)
@@ -124,15 +127,21 @@ class TargetUserFragment : Fragment(){
 
         peerConnection = factory.createPeerConnection(rtcConfig, object : PeerConnection.Observer {
             override fun onIceCandidate(candidate: IceCandidate?) {
-                Log.d("ice", "candidate")
-                val iceCandidate = hashMapOf(
-                    "sdpMid" to candidate?.sdpMid,
-                    "sdpMLineIndex" to candidate?.sdpMLineIndex,
-                    "sdpCandidate" to candidate?.sdp
-                )
-                Log.d("candidate", iceCandidate.toString())
-                socket.emit("iceCandidate", iceCandidate)
+                candidate?.let {
+                    // Creating a JSON object to represent the ICE candidate
+                    val iceCandidate = JSONObject()
+                    iceCandidate.put("sdpMid", it.sdpMid)
+                    iceCandidate.put("sdpMLineIndex", it.sdpMLineIndex)
+                    iceCandidate.put("sdpCandidate", it.sdp)
+
+                    // Log the candidate for debugging
+                    Log.d("candidate", iceCandidate.toString())
+
+                    // Emit the candidate as a JSON object via the socket
+                    socket.emit("iceCandidate", iceCandidate.toString())
+                }
             }
+
 
             override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>?) {}
             override fun onAddStream(stream: MediaStream?) {}
@@ -166,11 +175,10 @@ class TargetUserFragment : Fragment(){
                    }
 
                    override fun onSetSuccess() {
-                       val offer = hashMapOf(
-                           "sdp" to desc?.description,
-                           "type" to desc?.type
-                       )
-                       socket.emit("offer", offer)
+                       val offerJson = JSONObject()
+                       offerJson.put("desc", desc?.description)
+                       offerJson.put("type", desc?.type)
+                       socket.emit("offer", offerJson)
                    }
 
                    override fun onCreateFailure(p0: String?) {
@@ -236,19 +244,34 @@ class TargetUserFragment : Fragment(){
     private fun onSocketConnection() {
         Log.d("socket", "listener")
         socket.on("iceCandidate") { candidate ->
-            Log.d("candidate", candidate.toString())
+            Log.d("sCandidate", "data ${candidate[0]}")
+            val data = candidate[0] as? String
+            var candidateJson = JSONObject(data)
+            val sdpMid = candidateJson.getString("sdpMid")
+            val sdpMLineIndex = candidateJson.getInt("sdpMLineIndex")
+            val sdpCandidate = candidateJson.getString("sdpCandidate")
+            val iceCandidate = IceCandidate(sdpMid, sdpMLineIndex, sdpCandidate)
+            Log.d("iceCandidate", iceCandidate.toString())
+            peerConnection.addIceCandidate(iceCandidate)
         }
+
         socket.on("offer"){args ->
             if (args != null && args.isNotEmpty()) {
-                // Assuming the first argument in the array is the SDP string
-                val sdp = args[0] as? String
-                if (sdp != null) {
-                    Log.d("offer", "triggered $sdp")
+                val data = args[0].toString()
+                Log.d("the offer","data ${args[0]})")
+
+                val offerJson = JSONObject(data)
+//
+                val sdp = offerJson.getString("desc")
+                Log.d("offerJson", sdp.toString())
+                if (data != null) {
                     val offer = SessionDescription(SessionDescription.Type.OFFER, sdp)
+                    Log.d("ready", offer.toString())
                     peerConnection.setRemoteDescription(object : SdpObserver {
                         override fun onCreateSuccess(p0: SessionDescription?) {}
                         override fun onSetSuccess() {
                             Log.d("offer", "Remote offer set successfully")
+                            createAnswer()
 
                         }
                         override fun onCreateFailure(p0: String?) {}
@@ -273,28 +296,20 @@ class TargetUserFragment : Fragment(){
                 }
 
                 override fun onSetSuccess() {
-                    TODO("Not yet implemented")
+                    Log.d("status", "success")
                 }
 
                 override fun onCreateFailure(p0: String?) {
-                    TODO("Not yet implemented")
+                    Log.d("status", "failure")
                 }
 
                 override fun onSetFailure(p0: String?) {
-                    TODO("Not yet implemented")
+                    Log.d("status", "failure")
+
                 }
             }, sessionDescription)
         }
-        socket.on("iceCandidate"){ args ->
-            try {
-                val receivingCandidate = gson.fromJson(gson.toJson(args),
-                    IceCandidateModel::class.java)
-                peerConnection.addIceCandidate(IceCandidate(receivingCandidate.sdpMid,
-                    Math.toIntExact(receivingCandidate.sdpMLineIndex.toLong()),receivingCandidate.sdpCandidate))
-            }catch (e:Exception){
-                e.printStackTrace()
-            }
-        }
+
     }
 
 }

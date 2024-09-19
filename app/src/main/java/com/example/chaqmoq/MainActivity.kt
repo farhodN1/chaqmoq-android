@@ -27,7 +27,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 //        sharedPrefs = getSharedPreferences("my_prefs", MODE_PRIVATE)
         val sharedPref = getSharedPreferences("UserInfo", Context.MODE_PRIVATE)
-        val nickname = sharedPref.getString("nickname", null)
+        var nickname = sharedPref.getString("nickname", null)
         val givenName = sharedPref.getString("givenName", null)
         val pictureURL = sharedPref.getString("pictureURL", null)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -46,7 +46,8 @@ class MainActivity : AppCompatActivity() {
         // Passing each menu ID as a set of Ids because each
         // menu should be considered as top level destinations.
         if (nickname == null){
-            navController.navigate(R.id.login_activity)
+//            navController.navigate(R.id.login_activity)
+            nickname = "027aaaaddeeffgghhhhiinnoorrvv"
         }
 
         appBarConfiguration = AppBarConfiguration(

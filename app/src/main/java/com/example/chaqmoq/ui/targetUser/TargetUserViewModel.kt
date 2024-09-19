@@ -23,7 +23,7 @@ class TargetUserViewModel : ViewModel() {
     }
 
     fun makeNetworkRequest() {
-        val url = "http://192.168.222.115:5000/messages"
+        val url = "http://192.168.130.138:5000/messages"
         val conId = "027aaaaddeeffgghhhhiinnoorrvv"
         val requestBody = "{\"conId\": \"$conId\"}"
         viewModelScope.launch {
