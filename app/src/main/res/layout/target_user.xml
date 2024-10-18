@@ -5,6 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
+
     <!-- Top toolbar with user's data and call buttons -->
     <androidx.appcompat.widget.Toolbar
         android:id="@+id/toolbar"
@@ -16,6 +17,7 @@
         tools:ignore="MissingConstraints">
 
         <!-- Username and last seen time -->
+
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -101,7 +103,7 @@
             android:maxLines="3"
             android:padding="10dp" />
 
-         <Button
+        <Button
             android:id="@+id/sendButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

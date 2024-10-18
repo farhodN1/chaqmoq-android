@@ -24,6 +24,8 @@ class HomeViewModel : ViewModel() {
     val text: LiveData<String> = _text
 
     init {
+        Log.i("shit", "scheisse")
+        
         makeNetworkRequest()
     }
 
@@ -31,7 +33,7 @@ class HomeViewModel : ViewModel() {
     fun makeNetworkRequest() {
         viewModelScope.launch {
             try {
-                val response = myHttpClient.getRequest("http://192.168.130.138:5000/userlist")
+                val response = myHttpClient.getRequest("http://192.168.1.7:5000/userlist")
                 val usersMap: Map<String, User> = Gson().fromJson(response, object : TypeToken<Map<String, User>>() {}.type)
                 val userList: List<User> = usersMap.values.toList()
                 _userList.postValue(userList)
@@ -39,6 +41,7 @@ class HomeViewModel : ViewModel() {
             } catch (e: JSONException) {
                 Log.e("MyTag", "JSON Error: ${e.message}")
                 // Handle JSON parsing error here
+
             } catch (e: Exception) {
                 Log.e("MyTag", "Error: ${e.message}")
                 // Handle other errors here

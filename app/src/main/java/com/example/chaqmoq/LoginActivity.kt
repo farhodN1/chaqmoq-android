@@ -86,7 +86,7 @@ class LoginActivity : AppCompatActivity() {
             try {
                 val gson = Gson()
                 val json = gson.toJson(data)
-                val response = myHttpClient.postRequest("http://192.168.0.102:5000/loggedin", json)
+                val response = myHttpClient.postRequest("http://192.168.1.7:5000/loggedin", json)
                 Log.i("post_response", "Response: $response")
             } catch (e: JSONException) {
                 Log.e("MyTag", "JSON Error: ${e.message}")
