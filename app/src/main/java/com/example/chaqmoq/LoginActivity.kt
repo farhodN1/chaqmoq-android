@@ -1,10 +1,10 @@
 package com.example.chaqmoq
 
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
 import com.auth0.android.Auth0
 import com.auth0.android.authentication.AuthenticationAPIClient
 import com.auth0.android.authentication.AuthenticationException
@@ -14,11 +14,15 @@ import com.auth0.android.result.Credentials
 import com.auth0.android.result.UserProfile
 import com.example.chaqmoq.databinding.ActivityLoginBinding
 import com.example.chaqmoq.network.MyHTTPClient
+import com.example.chaqmoq.repos.SocketRepository
 import com.google.gson.Gson
 import kotlinx.coroutines.launch
 import org.json.JSONException
+import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 
-class LoginActivity : AppCompatActivity() {
+class LoginActivity : Activity() {
 
     private lateinit var binding: ActivityLoginBinding
     private lateinit var account: Auth0
@@ -50,6 +54,7 @@ class LoginActivity : AppCompatActivity() {
                 })
         }
     }
+
     private fun showUserProfile(accessToken: String) {
         val client = AuthenticationAPIClient(account)
 
@@ -61,33 +66,49 @@ class LoginActivity : AppCompatActivity() {
 
                 override fun onSuccess(result: UserProfile) {
                     Log.i("check", "${result.nickname}")
-                    val sharedPref = getSharedPreferences("UserInfo", Context.MODE_PRIVATE)
-                    with(sharedPref.edit()) {
-                        putString("nickname", result.nickname)
-                        putString("givenName", result.givenName)
-                        putString("pictureURL", result.pictureURL)
-                        // Add other user info as needed
-                        apply()
-                    }
-                    // Ensure all elements are of type String
+
+                    // Prepare the user data to send to the backend
                     val userData = listOf(
                         result.nickname ?: "",
                         result.givenName ?: "",
                         result.pictureURL ?: "",
                         result.email ?: ""
                     )
+
                     postNetworkRequest(userData)
                 }
             })
     }
 
-    private fun postNetworkRequest(data: List<String>) {
-        lifecycleScope.launch {
+    private fun postNetworkRequest(userData: List<String>) {
+        CoroutineScope(Dispatchers.Default).launch {
             try {
                 val gson = Gson()
-                val json = gson.toJson(data)
-                val response = myHttpClient.postRequest("http://192.168.1.7:5000/loggedin", json)
-                Log.i("post_response", "Response: $response")
+                val userInfo = gson.toJson(userData)
+                val ip = SocketRepository.ip
+                Log.d("req", userInfo)
+                val response = myHttpClient.postRequest(ip +"/loggedin", userInfo)
+                Log.d("responce", response)
+                // Check if the response from the backend is "successful"
+                if (response == "successful") {
+                    // Save user data to SharedPreferences after successful response
+                    val sharedPref = getSharedPreferences("UserInfo", Context.MODE_PRIVATE)
+                    with(sharedPref.edit()) {
+                        putString("nickname", userData[0])
+                        putString("givenName", userData[1])
+                        putString("pictureURL", userData[2])
+                        putString("email", userData[3])
+                        apply()
+                    }
+                    FirebaseMessaging.getInstance().isAutoInitEnabled = true
+                    Log.d("intent", "this is where it should navigate")
+                    val intent = Intent(this@LoginActivity, MainActivity::class.java)
+                    startActivity(intent)
+                    finish()
+                    Log.i("post_response", "Data saved to SharedPreferences")
+                } else {
+                    Log.e("post_response", "Failed to save data, response: $response")
+                }
             } catch (e: JSONException) {
                 Log.e("MyTag", "JSON Error: ${e.message}")
             } catch (e: Exception) {
@@ -95,6 +116,4 @@ class LoginActivity : AppCompatActivity() {
             }
         }
     }
-
-
 }

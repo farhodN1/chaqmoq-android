@@ -1,0 +1,4 @@
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#d0f0c0" /> <!-- Light green color for sent messages -->
+    <corners android:radius="12dp" /> <!-- Rounded corners -->
+</shape>

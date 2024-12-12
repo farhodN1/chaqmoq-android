@@ -10,20 +10,22 @@
         android:name="com.example.chaqmoq.ui.home.HomeFragment"
         android:label="@string/menu_home"
         tools:layout="@layout/fragment_home"/>
-
     <fragment
         android:id="@+id/incoming_call"
         android:name="com.example.chaqmoq.ui.incomingCall.IncomingCallFragment"
         android:label="incoming_call"
         tools:layout="@layout/incoming_call" />
-
     <fragment
         android:id="@+id/nav_call"
         android:name="com.example.chaqmoq.ui.callWindow.CallWindowFragment"
         android:label="call window"
         tools:layout="@layout/call_window">
     </fragment>
-
+    <fragment
+        android:id="@+id/nav_settings"
+        android:name="com.example.chaqmoq.ui.settings.SettingsFragment"
+        android:label="@string/menu_settings"
+        tools:layout="@layout/fragment_settings" />
     <fragment
         android:id="@+id/target_user"
         android:name="com.example.chaqmoq.ui.targetUser.TargetUserFragment"
@@ -41,7 +43,7 @@
         </action>
     </fragment>
     <fragment
-        android:id="@+id/test_fragment"
+        android:id="@+id/nav_calls"
         android:name="com.example.chaqmoq.ui.testFragment.TestFragment"
         android:label="Test Fragment"
         tools:layout="@layout/test_fragment" />
@@ -50,4 +52,9 @@
         android:name="com.example.chaqmoq.LoginActivity"
         android:label="Login"
         tools:layout="@layout/activity_login" />
+    <activity
+        android:id="@+id/main_activity"
+        android:name="com.example.chaqmoq.MainActivity"
+        android:label="Main"
+        tools:layout="@layout/activity_main" />
 </navigation>

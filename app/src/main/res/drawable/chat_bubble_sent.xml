@@ -1,0 +1,23 @@
+<!-- res/drawable/chat_bubble_sent.xml -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Tail for the chat bubble -->
+    <item>
+        <rotate
+            android:fromDegrees="45"
+            android:pivotX="50%"
+            android:pivotY="50%">
+            <shape android:shape="rectangle">
+                <solid android:color="#d0f0c0" /> <!-- Light green color -->
+                <size android:width="10dp" android:height="10dp" />
+            </shape>
+        </rotate>
+    </item>
+
+    <!-- Main bubble with rounded corners -->
+    <item android:right="12dp" android:top="4dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#d0f0c0" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+</layer-list>

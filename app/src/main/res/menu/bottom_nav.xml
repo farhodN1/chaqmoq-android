@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/nav_home"
+        android:icon="@android:drawable/sym_action_chat"
+        android:title="@string/menu_home" />
+
+    <item
+        android:id="@+id/nav_calls"
+        android:icon="@drawable/audio_call"
+        android:title="@string/menu_calls" />
+
+    <item
+        android:id="@+id/nav_settings"
+        android:icon="@drawable/baseline_settings_24"
+        android:title="@string/menu_settings" />
+
+</menu>

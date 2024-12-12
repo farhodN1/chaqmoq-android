@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.chaqmoq.model.Message
 import com.example.chaqmoq.network.MyHTTPClient
+import com.example.chaqmoq.repos.SocketRepository
 import com.example.chaqmoq.repos.WebRTCRepository
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -17,21 +18,10 @@ class TargetUserViewModel : ViewModel() {
     private val myHttpClient = MyHTTPClient()
     private val _messageList = MutableLiveData<List<Message>>()
     val messageList: LiveData<List<Message>> get() = _messageList
-//    private val _callState = MutableLiveData<String>()
-//    val callState: LiveData<String> = _callState
-//
-//    fun initiateCall() {
-//        WebRTCRepository.c()
-//        _callState.postValue("Calling...")
-//    }
+    val ip = SocketRepository.ip
 
-    init {
-        makeNetworkRequest()
-    }
-
-    fun makeNetworkRequest() {
-        val url = "http://192.168.1.6:5000/messages"
-        val conId = "027aaaaddeeffgghhhhiinnoorrvv"
+    fun makeNetworkRequest(conId: String) {
+        val url = "${ip}/messages"
         val requestBody = "{\"conId\": \"$conId\"}"
         viewModelScope.launch {
             try {

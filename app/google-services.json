@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "186304713885",
+    "firebase_url": "https://aiomessenger-da2d4-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "aiomessenger-da2d4",
+    "storage_bucket": "aiomessenger-da2d4.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:186304713885:android:b3c1eb2d58f6a585aab074",
+        "android_client_info": {
+          "package_name": "com.example.chaqmoq"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC9w8-wodSpokMfdzkORmebDB44lX5T4og"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

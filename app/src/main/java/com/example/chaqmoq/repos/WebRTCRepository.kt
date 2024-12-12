@@ -1,24 +1,38 @@
 package com.example.chaqmoq.repos
 
 import android.content.Context
+import android.media.AudioManager
 import android.util.Log
 import org.json.JSONObject
 import org.webrtc.*
 
 object WebRTCRepository {
     private var videoCapturer: CameraVideoCapturer? = null
-    private val localVideoSource by lazy { factory.createVideoSource(false) }
-    private val localAudioSource by lazy { factory.createAudioSource(MediaConstraints()) }
+    private var localVideoSource: VideoSource? = null
+    private var localAudioSource: AudioSource? = null
     lateinit var factory: PeerConnectionFactory
     lateinit var peerConnection: PeerConnection
     var localAudioTrack: AudioTrack? = null
     var localVideoTrack: VideoTrack? = null
     var isAudioOnly: Boolean = false
-    val eglBase = EglBase.create()
+    private var eglBase: EglBase? = null
+
+    fun initializeEglBase() {
+        if (eglBase == null) {
+            eglBase = EglBase.create()
+        }
+    }
+    fun initializeSources() {
+        localVideoSource = factory.createVideoSource(false)
+        localAudioSource = factory.createAudioSource(MediaConstraints())
+    }
+
+    var onPCclosed: (() -> Unit)? = null
 
 
     fun initializePeerConnectionFactory(context: Context) {
 
+        initializeEglBase()
         val options = PeerConnectionFactory.InitializationOptions.builder(context)
             .setEnableInternalTracer(true)
             .setFieldTrials("")
@@ -27,8 +41,8 @@ object WebRTCRepository {
         PeerConnectionFactory.initialize(options)
 
         factory = PeerConnectionFactory.builder()
-            .setVideoEncoderFactory(DefaultVideoEncoderFactory(eglBase.eglBaseContext, true, true))
-            .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglBase.eglBaseContext))
+            .setVideoEncoderFactory(DefaultVideoEncoderFactory(eglBase?.eglBaseContext, true, true))
+            .setVideoDecoderFactory(DefaultVideoDecoderFactory(eglBase?.eglBaseContext))
             .setOptions(PeerConnectionFactory.Options().apply {
                 disableEncryption = false
                 disableNetworkMonitor = true
@@ -44,24 +58,22 @@ object WebRTCRepository {
         )
 
         val rtcConfig = PeerConnection.RTCConfiguration(iceServers)
-
+        val hostId = context.getSharedPreferences("UserInfo", Context.MODE_PRIVATE).getString("nickname", null)
+        val targetId = context.getSharedPreferences("TargetInfo", Context.MODE_PRIVATE).getString("id", null)
         peerConnection = factory.createPeerConnection(rtcConfig, object : PeerConnection.Observer {
             override fun onIceCandidate(candidate: IceCandidate?) {
                 candidate?.let {
                     // Creating a JSON object to represent the ICE candidate
-                    val iceCandidate = JSONObject()
-                    iceCandidate.put("candidate", it.sdp)
-                    iceCandidate.put("sdpMid", it.sdpMid)
-                    iceCandidate.put("sdpMLineIndex", it.sdpMLineIndex)
-                    // Log the candidate for debugging
-                    Log.d("candidate", iceCandidate.toString())
-
-                    // Emit the candidate as a JSON object via the socket
-                    SocketRepository.socket.emit("iceCandidate", iceCandidate.toString())
+                    val json = JSONObject()
+                    json.put("candidate", it.sdp)
+                    json.put("sdpMid", it.sdpMid)
+                    json.put("sdpMLineIndex", it.sdpMLineIndex)
+                    json.put("sender", hostId)
+                    json.put("receiver", targetId)
+                    Log.d("RTC", "emitting ice candidates")
+                    SocketRepository.socket.emit("iceCandidate", json)
                 }
             }
-
-
             override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>?) {}
             override fun onAddStream(stream: MediaStream?) {
                 if (stream == null) {
@@ -97,13 +109,26 @@ object WebRTCRepository {
                     Log.w("WebRTC", "onAddStream: No audio tracks found in the remote stream")
                 }
             }
-
             override fun onRemoveStream(stream: MediaStream?) {}
             override fun onDataChannel(dataChannel: DataChannel?) {}
             override fun onRenegotiationNeeded() {}
             override fun onAddTrack(receiver: RtpReceiver?, mediaStreams: Array<MediaStream>?) {}
             override fun onSignalingChange(state: PeerConnection.SignalingState?) {}
-            override fun onIceConnectionChange(state: PeerConnection.IceConnectionState?) {}
+            override fun onIceConnectionChange(state: PeerConnection.IceConnectionState?) {
+                when (state) {
+                    PeerConnection.IceConnectionState.CLOSED -> {
+                        Log.d("PeerConnection", "Connection is closed")
+                        onPCclosed?.invoke()
+                    }
+                    PeerConnection.IceConnectionState.DISCONNECTED -> {
+                        Log.d("PeerConnection", "Connection is disconnected")
+                        onPCclosed?.invoke()
+                    }
+                    else -> {
+                        Log.d("PeerConnection", "ICE state changed: $state")
+                    }
+                }
+            }
             override fun onConnectionChange(newState: PeerConnection.PeerConnectionState?) {}
             override fun onIceConnectionReceivingChange(receiving: Boolean) {}
             override fun onIceGatheringChange(state: PeerConnection.IceGatheringState?) {}
@@ -111,26 +136,29 @@ object WebRTCRepository {
 
         initializeSurfaceView(remoteView)
         initializeSurfaceView(localView)
-//        if (!isAudioOnly) {
-            startLocalVideo(localView, context)
-//        } else startLocalAudio()
+        initializeSources()
+        startLocalVideo(localView, context)
+
 
     }
 
-    fun createOffer(){
+    fun createOffer(hostId: String, targetId: String){
+
         peerConnection.createOffer(object : SdpObserver {
             override fun onCreateSuccess(desc: SessionDescription?) {
-                peerConnection?.setLocalDescription(object : SdpObserver {
+                peerConnection.setLocalDescription(object : SdpObserver {
                     override fun onCreateSuccess(p0: SessionDescription?) {
                         TODO("Not yet implemented")
                     }
 
                     override fun onSetSuccess() {
-                        Log.d("on", "create offer")
-                        val offerJson = JSONObject()
-                        offerJson.put("sdp", desc?.description)
-                        offerJson.put("type", "offer")
-                        SocketRepository.socket.emit("offer", offerJson)
+                        Log.d("RTC", "emitting offer")
+                        val json = JSONObject()
+                        json.put("sdp", desc?.description)
+                        json.put("sender", hostId)
+                        json.put("receiver", targetId)
+
+                        SocketRepository.socket.emit("offer", json)
                     }
 
                     override fun onCreateFailure(p0: String?) {
@@ -152,21 +180,24 @@ object WebRTCRepository {
         }, MediaConstraints())
     }
 
-    fun createAnswer() {
+    fun createAnswer(hostId: String, targetId: String) {
         val constraints = MediaConstraints()
         constraints.mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
 
-        peerConnection?.createAnswer(object : SdpObserver {
+        peerConnection.createAnswer(object : SdpObserver {
             override fun onCreateSuccess(desc: SessionDescription?) {
-                peerConnection?.setLocalDescription(object : SdpObserver {
+                peerConnection.setLocalDescription(object : SdpObserver {
                     override fun onCreateSuccess(p0: SessionDescription?) {
                     }
 
                     override fun onSetSuccess() {
-                        val answerJson = JSONObject()
-                        answerJson.put("sdp", desc?.description)
-                        answerJson.put("type", "answer")
-                        SocketRepository.socket.emit("answer", answerJson)
+                        val json = JSONObject()
+                        json.put("sdp", desc?.description)
+                        json.put("sender", hostId)
+                        json.put("receiver", targetId)
+
+                        Log.d("RTC", "emitting answer")
+                        SocketRepository.socket.emit("answer", json)
                     }
 
                     override fun onCreateFailure(p0: String?) {
@@ -192,12 +223,12 @@ object WebRTCRepository {
 
     fun startLocalVideo(surface: SurfaceViewRenderer, context: Context) {
         val surfaceTextureHelper =
-            SurfaceTextureHelper.create(Thread.currentThread().name, eglBase.eglBaseContext)
+            SurfaceTextureHelper.create(Thread.currentThread().name, eglBase?.eglBaseContext)
         if (!isAudioOnly) {
             videoCapturer = getVideoCapturer(context)
             videoCapturer?.initialize(
                 surfaceTextureHelper,
-                surface.context, localVideoSource.capturerObserver
+                surface.context, localVideoSource?.capturerObserver
             )
             videoCapturer?.startCapture(320, 240, 30)
         }
@@ -213,14 +244,6 @@ object WebRTCRepository {
         peerConnection.addStream(localStream)
 
     }
-    fun startLocalAudio() {
-        localVideoTrack = factory.createVideoTrack("local_track", localVideoSource)
-        localAudioTrack =
-            factory.createAudioTrack("local_track_audio", localAudioSource)
-        val localStream = factory.createLocalMediaStream("local_stream")
-        peerConnection.addStream(localStream)
-    }
-
 
     private fun getVideoCapturer(context: Context): CameraVideoCapturer {
         return Camera2Enumerator(context).run {
@@ -237,7 +260,13 @@ object WebRTCRepository {
         // Check if peerConnection is initialized
         if (!::peerConnection.isInitialized) {
             Log.e("WebRTC", "peerConnection is not initialized.")
-            return  // Exit if peerConnection is not initialized
+            return
+        }
+
+        // Avoid multiple invocations
+        if (peerConnection.iceConnectionState() == PeerConnection.IceConnectionState.CLOSED) {
+            Log.d("WebRTC", "Peer connection already closed.")
+            return
         }
 
         // Stop the video capture (if initialized)
@@ -253,32 +282,81 @@ object WebRTCRepository {
 
         // Stop the video track
         localVideoTrack?.setEnabled(false) // Disable the video track
-        localVideoTrack?.removeSink(localView) // Remove the video sink (SurfaceViewRenderer)
+        localVideoTrack?.removeSink(localView) // Remove the video sink
 
         // Mute the audio track
         localAudioTrack?.setEnabled(false) // Mute the audio track
 
         // Close the PeerConnection
         peerConnection.close()
+        peerConnection.dispose()
 
-        // Clear the references to the media tracks
+        localAudioSource?.dispose()
+        localVideoSource?.dispose()
+
+        // Clear references to media tracks
         localAudioTrack = null
         localVideoTrack = null
 
-        // Optionally dispose of the PeerConnectionFactory if no longer needed
-        factory.dispose() // Clear resources associated with PeerConnectionFactory
 
-        // Optionally dispose of the EglBase if no longer needed
-        eglBase.release()
+        // Dispose of the PeerConnectionFactory and EGL base
+        factory.dispose() // Clear resources
+        localView.release()
+
+        eglBase?.release()
+        eglBase = null
     }
-
-
 
     fun initializeSurfaceView(surface: SurfaceViewRenderer) {
         surface.run {
             setEnableHardwareScaler(true)
             setMirror(true)
-            init(eglBase.eglBaseContext, null)
+            init(eglBase?.eglBaseContext, null)
         }
     }
+
+    fun switchCamera() {
+        videoCapturer?.let {
+            if (it is CameraVideoCapturer) {
+                it.switchCamera(object : CameraVideoCapturer.CameraSwitchHandler {
+                    override fun onCameraSwitchDone(isFrontCamera: Boolean) {
+                        Log.d("WebRTC", "Camera switched to ${if (isFrontCamera) "front" else "back"}")
+                    }
+
+                    override fun onCameraSwitchError(errorDescription: String?) {
+                        Log.e("WebRTC", "Error switching camera: $errorDescription")
+                    }
+                })
+            } else {
+                Log.e("WebRTC", "Video capturer is not an instance of CameraVideoCapturer")
+            }
+        }
+    }
+
+    fun toggleMuteAudio() {
+        localAudioTrack?.let {
+            val isEnabled = it.enabled()
+            it.setEnabled(!isEnabled)
+            Log.d("WebRTC", "Audio is now ${if (isEnabled) "muted" else "unmuted"}")
+        }
+    }
+
+    fun toggleSpeaker(context: Context) {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+        // Toggle speakerphone
+        val isCurrentlyOn = audioManager.isSpeakerphoneOn
+        audioManager.isSpeakerphoneOn = !isCurrentlyOn
+
+        // Ensure the audio mode is set correctly
+        audioManager.mode = if (!isCurrentlyOn) {
+            AudioManager.MODE_IN_COMMUNICATION // Turn speakerphone ON
+        } else {
+            AudioManager.MODE_NORMAL // Turn speakerphone OFF
+        }
+
+        Log.d("WebRTC", "Speakerphone toggled: ${!isCurrentlyOn}")
+    }
+
+
 }

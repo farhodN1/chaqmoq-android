@@ -12,8 +12,9 @@ import com.example.chaqmoq.R
 import com.example.chaqmoq.databinding.UserItemBinding
 import com.example.chaqmoq.model.User
 import com.bumptech.glide.Glide
+import com.bumptech.glide.request.RequestOptions
 
-class UserListAdapter(private val userData: SharedPreferences, private val onItemClick: (User) -> Unit) : ListAdapter<User, UserListAdapter.UserViewHolder>(UserDiffCallback()) {
+class UserListAdapter(private val onItemClick: (User) -> Unit) : ListAdapter<User, UserListAdapter.UserViewHolder>(UserDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): UserViewHolder {
         val binding = UserItemBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -21,13 +22,7 @@ class UserListAdapter(private val userData: SharedPreferences, private val onIte
     }
 
     override fun onBindViewHolder(holder: UserViewHolder, position: Int) {
-        val hostId = userData.getString("nickname", null)
         val user = getItem(position)
-
-        // Skip binding if the user is the host
-        if (user.id == hostId) {
-            return
-        }
 
         holder.bind(user)
     }
@@ -37,12 +32,12 @@ class UserListAdapter(private val userData: SharedPreferences, private val onIte
             val imageView = itemView.findViewById<ImageView>(R.id.imageViewProfile)
             Glide.with(itemView)
                 .load(user.profilePicture)
+                .apply(RequestOptions.circleCropTransform())
                 .placeholder(R.drawable.circle_background)
                 .error(R.drawable.circle_background)
                 .into(imageView)
-            binding.user = user
+            binding.userNameTextView.text = user.username
             binding.root.setOnClickListener{ onItemClick(user) }
-            binding.executePendingBindings()
         }
     }
 

@@ -1,43 +1,37 @@
 package com.example.chaqmoq.repos
 
 import android.content.Context
-import android.content.Intent
 import android.util.Log
 import io.socket.client.IO
 import io.socket.client.Socket
 import org.json.JSONException
 import org.json.JSONObject
 import org.webrtc.IceCandidate
+import org.webrtc.PeerConnection
 import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
 
 object SocketRepository {
-    val socket: Socket = IO.socket("http://192.168.1.7:5000")
+    var ip: String = "http://192.168.27.115:5000"
+    val socket: Socket = IO.socket("${ip}")
+    var callMaker: String? = null
 
-    fun onSocketConnection() {
+    fun onSocketConnection(context: Context) {
+        val hostId = context.getSharedPreferences("UserInfo", Context.MODE_PRIVATE).getString("nickname", null);
+        val targetId = context.getSharedPreferences("TargetInfo", Context.MODE_PRIVATE).getString("id", null);
         socket.connect()
         socket.on("iceCandidate") { candidate ->
-            Log.d("candidate check", candidate.isNotEmpty().toString())
-            if (candidate.isNotEmpty()) {
-                val data = candidate[0] as? String
-                if (data != null) {
-                    Log.d("iceCandidate t2", "$data")
-                    try {
-                        val candidateJson = JSONObject(data)
-                        val iceCandidate = IceCandidate(
-                            candidateJson.getString("sdpMid"),
-                            candidateJson.getInt("sdpMLineIndex"),
-                            candidateJson.getString("candidate")
-                        )
-                        WebRTCRepository.peerConnection.addIceCandidate(iceCandidate)
-                    } catch (e: JSONException) {
-                        Log.e("iceCandidate Error", "Failed to parse ICE candidate: ${e.message}")
-                    }
-                } else {
-                    Log.e("iceCandidate Error", "The first element is not a String.")
-                }
-            } else {
-                Log.e("iceCandidate Error", "Received empty candidate array.")
+            Log.d("candidate check", JSONObject(candidate[0].toString()).toString())
+            try {
+                val iceCandidate = IceCandidate(
+                    JSONObject(candidate[0].toString())["sdpMid"].toString(),
+                    JSONObject(candidate[0].toString())["sdpMLineIndex"] as Int,
+                    JSONObject(candidate[0].toString())["candidate"].toString()
+                )
+
+                WebRTCRepository.peerConnection.addIceCandidate(iceCandidate)
+            } catch (e: Exception) {
+                Log.e("RTC", e.toString())
             }
         }
 
@@ -45,23 +39,25 @@ object SocketRepository {
             if (args != null && args.isNotEmpty()) {
                 val data = args[0].toString()
                 Log.d("the offer","data ${args[0]})")
-                val offerJson = JSONObject(data)
-                val sdp = offerJson.getString("sdp")
-                val offer = SessionDescription(SessionDescription.Type.OFFER, sdp)
-                Log.d("ready", offer.toString())
-                WebRTCRepository.peerConnection.setRemoteDescription(object : SdpObserver {
-                    override fun onCreateSuccess(p0: SessionDescription?) {}
-                    override fun onSetSuccess() {
-                        Log.d("offer", "Remote offer set successfully")
-                        WebRTCRepository.createAnswer()
-                    }
-                    override fun onCreateFailure(p0: String?) {
-                        Log.e("offer", "error on oncreatefailure: ${p0}")
-                    }
-                    override fun onSetFailure(p0: String?) {
-                        Log.e("offer", "Remote offer setting failed: $p0")
-                    }
-                }, offer)
+                val offer = SessionDescription(SessionDescription.Type.OFFER, data)
+                Log.d("signaling state", WebRTCRepository.peerConnection.signalingState().toString())
+                if (WebRTCRepository.peerConnection.signalingState() !== PeerConnection.SignalingState.HAVE_LOCAL_OFFER) {
+                    WebRTCRepository.peerConnection.setRemoteDescription(object : SdpObserver {
+                        override fun onCreateSuccess(p0: SessionDescription?) {}
+                        override fun onSetSuccess() {
+                            Log.d("RTC", "Remote offer set successfully")
+                            if (hostId !== null && targetId !== null) {
+                                WebRTCRepository.createAnswer(hostId, targetId)
+                            }
+                        }
+                        override fun onCreateFailure(p0: String?) {
+                            Log.e("offer", "error on oncreatefailure: ${p0}")
+                        }
+                        override fun onSetFailure(p0: String?) {
+                            Log.e("offer", "Remote offer setting failed: $p0")
+                        }
+                    }, offer)
+                }
             } else {
                 Log.e("offer", "Received invalid data")
             }
@@ -71,24 +67,26 @@ object SocketRepository {
             if (args != null && args.isNotEmpty()) {
                 val data = args[0].toString()
                 Log.d("the answer","data ${args[0]})")
-                val answerJson = JSONObject(data)
-                val sdp = answerJson.getString("sdp")
-                Log.d("answerJson", sdp.toString())
-                    val answer = SessionDescription(SessionDescription.Type.ANSWER, sdp)
+                    val answer = SessionDescription(SessionDescription.Type.ANSWER, data)
                     Log.d("ready", answer.toString())
-                    WebRTCRepository.peerConnection.setRemoteDescription(object : SdpObserver {
-                        override fun onCreateSuccess(p0: SessionDescription?) {}
-                        override fun onSetSuccess() {
-                            Log.d("answer", "Remote answer set successfully")
-                            WebRTCRepository.createAnswer()
-                        }
-                        override fun onCreateFailure(p0: String?) {
-                            Log.e("answer", "error on oncreatefailure: ${p0}")
-                        }
-                        override fun onSetFailure(p0: String?) {
-                            Log.e("answer", "Remote answer setting failed: $p0")
-                        }
-                    }, answer)
+                    Log.d("signaling state", WebRTCRepository.peerConnection.signalingState().toString())
+                    if (WebRTCRepository.peerConnection.signalingState() == PeerConnection.SignalingState.HAVE_LOCAL_OFFER) {
+                        WebRTCRepository.peerConnection.setRemoteDescription(object : SdpObserver {
+                            override fun onCreateSuccess(p0: SessionDescription?) {}
+                            override fun onSetSuccess() {
+                                Log.d("RTC", "Remote answer set successfully")
+                                if (hostId !== null && targetId !== null) {
+                                    WebRTCRepository.createAnswer(hostId, targetId)
+                                }
+                            }
+                            override fun onCreateFailure(p0: String?) {
+                                Log.e("answer", "error on oncreatefailure: ${p0}")
+                            }
+                            override fun onSetFailure(p0: String?) {
+                                Log.e("answer", "Remote answer setting failed: $p0")
+                            }
+                        }, answer)
+                    }
             } else {
                 Log.e("answer", "Received invalid data")
             }

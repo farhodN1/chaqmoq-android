@@ -11,4 +11,5 @@ data class User(
     val profilePicture: String? = null,
     val socket_id: String,
     val status: String,
+    val lastSeen: String
 ) : Parcelable
