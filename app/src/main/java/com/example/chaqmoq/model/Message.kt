@@ -7,6 +7,7 @@ import kotlinx.parcelize.Parcelize
 data class Message(
     val message: String,
     val message_type: String? = null,
+    val amplitudes: String? = null,
     val receiver_id: String,
     val sender_id: String? = null,
     val send_time: String

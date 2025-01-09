@@ -2,11 +2,12 @@ package com.example.chaqmoq.ui.targetUser
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Bundle
-import android.os.Debug
 import android.os.Handler
 import android.os.Looper
 import android.text.Editable
@@ -16,8 +17,6 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
-import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.findNavController
@@ -31,15 +30,15 @@ import com.example.chaqmoq.R
 import com.example.chaqmoq.adapter.MessageListAdapter
 import com.example.chaqmoq.databinding.TargetUserBinding
 import com.example.chaqmoq.repos.SocketRepository
-import com.example.chaqmoq.repos.VoiceRecorder
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
-
+import com.google.gson.Gson
 import org.json.JSONObject
 import org.threeten.bp.Instant
-import java.io.File
+import java.nio.ByteBuffer
 import java.util.Timer
 import java.util.TimerTask
+import kotlin.math.abs
+
 
 class TargetUserFragment : Fragment(){
     private var _binding: TargetUserBinding? = null
@@ -49,6 +48,7 @@ class TargetUserFragment : Fragment(){
     private lateinit var mediaRecorder: MediaRecorder
     private lateinit var filePath: String
     lateinit var file: String
+    var isRecordingStopped: Boolean = true
 
 
     private val hostData: SharedPreferences by lazy {
@@ -71,17 +71,13 @@ class TargetUserFragment : Fragment(){
         _binding = TargetUserBinding.inflate(inflater, container, false)
         val root: View = binding.root
         val recyclerView: RecyclerView = binding.recyclerView
+
         binding.messageEditText.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
-                Log.d("beforeTextChanged", "onTextChanged")
             }
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                Log.d("textWatcher", "onTextChanged")
-
             }
-
             override fun afterTextChanged(s: Editable?) {
-                Log.d("afterTextChanged", "onTextChanged")
                 if (s.toString() == "") {
                     binding.sendButton.visibility = View.GONE
                     binding.voiceMsgBtn.visibility = View.VISIBLE
@@ -92,9 +88,8 @@ class TargetUserFragment : Fragment(){
             }
         })
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
-        Log.d("check hD", hostData.getString("nickname", "shit")!!)
         messageListAdapter = MessageListAdapter(hostData, requireContext())
-        binding.sendButton.setOnClickListener{sendMessage()}
+        binding.sendButton.setOnClickListener{sendMessage("text")}
         val targetUserName = targetData.getString("username", null)
         val targetUserImage = targetData.getString("pictureURL", null)
         val targetUserLastSeen = targetData.getString("lastSeen", null)
@@ -122,15 +117,6 @@ class TargetUserFragment : Fragment(){
         val myString = targetId + hostId
         val conversationId = myString.toList().sorted().joinToString("")
         targetUserViewModel.makeNetworkRequest(conversationId)
-        SocketRepository.socket.on("private message") {
-            targetUserViewModel.makeNetworkRequest(conversationId)
-            if (context !== null) {
-                val plopUri = Uri.parse("android.resource://${requireContext().packageName}/raw/plop")
-                player = MediaPlayer.create(context, plopUri)
-                player?.start()
-            }
-
-        }
 
         SocketRepository.socket.on("updateMessage") {
             if (_binding !== null) {
@@ -144,7 +130,6 @@ class TargetUserFragment : Fragment(){
         }
 
         recyclerView.adapter = messageListAdapter
-
 
         targetUserViewModel.messageList.observe(viewLifecycleOwner) { messageList ->
             Log.d("messageList", messageList.toString())
@@ -172,16 +157,25 @@ class TargetUserFragment : Fragment(){
             findNavController().navigate(R.id.nav_call, bundle)
         }
 
+        val handler = Handler(Looper.getMainLooper())
+        val stopRecorder = Runnable {
+            stopRecording()
+        }
+
         binding.voiceMsgBtn.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    startRecording()
+                    handler.removeCallbacks(stopRecorder)
+                    if (isRecordingStopped) {
+                        startRecording()
+                    }
                     binding.voiceMsgBtn.visibility = View.GONE
                     binding.animationCircle.visibility = View.VISIBLE
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    stopRecording()
+                    handler.postDelayed(stopRecorder, 500)
+
                     binding.voiceMsgBtn.visibility = View.VISIBLE
                     binding.animationCircle.visibility = View.GONE
                     true
@@ -197,7 +191,7 @@ class TargetUserFragment : Fragment(){
         _binding = null
     }
 
-    fun sendMessage(messageType: String? = null, messageInput: String? = null) {
+    fun sendMessage(messageType: String? = null, messageInput: String? = null, amps: List<Float>? = null) {
         val targetId = targetData.getString("id", null)
         val hostId = hostData.getString("nickname", null)
         val utcInstant = Instant.now()
@@ -208,13 +202,13 @@ class TargetUserFragment : Fragment(){
         jsonObject.put("sender", sender)
         jsonObject.put("recipient", recipient)
         jsonObject.put("sendTime", utcInstant)
-        if (messageInput != null) {
+        if (messageType == "audio") {
             jsonObject.put("message", messageInput)
+            jsonObject.put("message_type", messageType)
+            jsonObject.put("amplitudes", Gson().toJson(amps))
+
         } else {
             jsonObject.put("message", message)
-        }
-
-        if (messageType !== null) {
             jsonObject.put("message_type", messageType)
         }
         SocketRepository.socket.emit("private message", jsonObject)
@@ -222,6 +216,7 @@ class TargetUserFragment : Fragment(){
     }
 
     private fun startRecording() {
+        isRecordingStopped = false
         file = "voice_message_${System.currentTimeMillis()}.m4a"
         filePath = "${context?.externalCacheDir?.absolutePath}/${file}"
 
@@ -234,20 +229,24 @@ class TargetUserFragment : Fragment(){
             start()
         }
         Log.d("voice", "Recording started")
-        startAnimation(binding.animationCircle)
+//        startAnimation(binding.animationCircle)
     }
 
     private fun stopRecording() {
+        Log.d("it's", "up")
+        isRecordingStopped = true
         mediaRecorder.apply {
             stop()
             release()
         }
         val uri = "file:///storage/emulated/0/Android/data/com.example.chaqmoq/cache/${file}"
+        val amps = extractWaveformFromAudioFile(filePath)
+        Log.d("extracted amps", amps.toString())
+        uploadFileToFirestore(Uri.parse(uri), amps)
         Log.d("voice", "Recording saved to $filePath")
-        uploadFileToFirestore(Uri.parse(uri))
     }
 
-    fun uploadFileToFirestore(fileUri: Uri) {
+    fun uploadFileToFirestore(fileUri: Uri, amps: List<Float>) {
         Log.d("fikeUri", fileUri.toString())
         val storageReference = FirebaseStorage.getInstance().reference
 
@@ -257,7 +256,7 @@ class TargetUserFragment : Fragment(){
             .addOnSuccessListener { taskSnapshot ->
                 fileReference.downloadUrl.addOnSuccessListener { uri ->
                     Log.d("FirebaseStorage", "File uploaded successfully. URL: $uri")
-                    sendMessage("audio", uri.toString())
+                    sendMessage("audio", uri.toString(), amps)
                 }
             }
             .addOnFailureListener { e ->
@@ -265,11 +264,50 @@ class TargetUserFragment : Fragment(){
             }
     }
 
+    fun extractWaveformFromAudioFile(filePath: String): List<Float> {
+        val extractor = MediaExtractor()
+        extractor.setDataSource(filePath)
+        val format = extractor.getTrackFormat(0)
+        val amplitudes = mutableListOf<Float>()
+
+        // Ensure the selected track is audio
+        if (format.getString(MediaFormat.KEY_MIME)?.startsWith("audio") == true) {
+            extractor.selectTrack(0)
+
+            // Allocate ByteBuffer for reading samples
+            val bufferSize = 1024
+            val byteBuffer = ByteBuffer.allocate(bufferSize)
+
+
+            while (true) {
+                byteBuffer.clear() // Clear the buffer before reuse
+                val read = extractor.readSampleData(byteBuffer, 0)
+                if (read < 0) break // End of file
+
+                // Convert ByteBuffer to ByteArray
+                val byteArray = ByteArray(read)
+                byteBuffer.get(byteArray, 0, read)
+
+                // Calculate the average amplitude from the sample data
+                val amplitude = byteArray.map {
+                    Log.d("ampByte", it.toString())
+                    abs(it.toFloat()) / Byte.MAX_VALUE
+                }.average()
+                amplitudes.add(amplitude.toFloat())
+
+                extractor.advance()
+            }
+
+            extractor.release()
+        }
+        return amplitudes
+    }
+
     private fun startAnimation(view: View) {
         Timer().scheduleAtFixedRate(object : TimerTask() {
             override fun run() {
                 val scale =
-                    1.0f + (mediaRecorder!!.maxAmplitude / 3000.0f) // Scale factor based on amplitude
+                    1.0f + (mediaRecorder.maxAmplitude / 3000.0f) // Scale factor based on amplitude
                 Handler(Looper.getMainLooper()).post {
                     view.animate()
                         .scaleX(scale)

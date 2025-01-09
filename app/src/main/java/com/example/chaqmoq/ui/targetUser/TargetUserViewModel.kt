@@ -21,11 +21,11 @@ class TargetUserViewModel : ViewModel() {
     val ip = SocketRepository.ip
 
     fun makeNetworkRequest(conId: String) {
-        val url = "${ip}/messages"
         val requestBody = "{\"conId\": \"$conId\"}"
         viewModelScope.launch {
             try {
-                val response = myHttpClient.postRequest(url, requestBody)
+                val response = myHttpClient.postRequest("messages", requestBody)
+                Log.d("raw resposne", response)
                 val usersMap: Map<String, Message> = Gson().fromJson(response, object : TypeToken<Map<String, Message>>() {}.type)
                 val userList: List<Message> = usersMap.values.toList()
                 _messageList.postValue(userList)

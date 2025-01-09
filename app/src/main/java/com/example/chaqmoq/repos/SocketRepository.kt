@@ -12,14 +12,16 @@ import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
 
 object SocketRepository {
-    var ip: String = "http://192.168.27.115:5000"
+    var ip: String = "http://192.168.187.115:5000"
     val socket: Socket = IO.socket("${ip}")
     var callMaker: String? = null
 
     fun onSocketConnection(context: Context) {
-        val hostId = context.getSharedPreferences("UserInfo", Context.MODE_PRIVATE).getString("nickname", null);
-        val targetId = context.getSharedPreferences("TargetInfo", Context.MODE_PRIVATE).getString("id", null);
+        val hostId = context.getSharedPreferences("UserInfo", Context.MODE_PRIVATE).getString("nickname", null)
+        val targetId = context.getSharedPreferences("TargetInfo", Context.MODE_PRIVATE).getString("id", null)
+
         socket.connect()
+
         socket.on("iceCandidate") { candidate ->
             Log.d("candidate check", JSONObject(candidate[0].toString()).toString())
             try {

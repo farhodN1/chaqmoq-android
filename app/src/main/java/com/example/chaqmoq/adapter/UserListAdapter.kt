@@ -23,7 +23,6 @@ class UserListAdapter(private val onItemClick: (User) -> Unit) : ListAdapter<Use
 
     override fun onBindViewHolder(holder: UserViewHolder, position: Int) {
         val user = getItem(position)
-
         holder.bind(user)
     }
 

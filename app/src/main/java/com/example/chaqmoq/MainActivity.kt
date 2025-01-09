@@ -38,13 +38,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        userId = getSharedPreferences("UserInfo", Context.MODE_PRIVATE).getString("nickname", null)
+        redirect()
         AndroidThreeTen.init(this)
         socket.connect()
         if (!Settings.canDrawOverlays(this)) {
             requestOverlayPermission()
         }
-        userId = getSharedPreferences("UserInfo", Context.MODE_PRIVATE).getString("nickname", null)
-        redirect()
+
         homeViewModel = ViewModelProvider(this).get(HomeViewModel::class.java)
 
         lastSeenData = JSONObject().apply {
@@ -55,7 +56,9 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         setupNavigation()
         requestPermissions()
-        initializeSocket()
+        if (userId !== null) {
+            initializeSocket()
+        }
 
         val callType = intent.getStringExtra("callType")
         Log.d("callType", callType.toString())
@@ -217,6 +220,8 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         Log.d("on", "stop");
-        socket.emit("lastSeen", lastSeenData)
+        if (userId !== null) {
+            socket.emit("lastSeen", lastSeenData)
+        }
     }
 }

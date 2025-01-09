@@ -59,7 +59,7 @@ class CallWindowFragment : Fragment() {
         }
         if (callType == "video") {
             Log.d("call", "emitting video call")
-            if (incoming == false) {
+            if (!incoming) {
                 SocketRepository.socket.emit("videoCall", JSONObject().apply {
                     put("sender", hostId)
                     put("recipient", targetId)
@@ -74,7 +74,7 @@ class CallWindowFragment : Fragment() {
 
         } else if (callType == "audio") {
             Log.d("call", "emitting video call")
-            if (incoming == false) {
+            if (!incoming) {
                 SocketRepository.socket.emit("audioCall", JSONObject().apply {
                     put("sender", hostId)
                     put("recipient", targetId)
@@ -99,6 +99,7 @@ class CallWindowFragment : Fragment() {
                 }
             }
         }
+
         Log.d("socket connection status", SocketRepository.socket.connected().toString())
         val senderId = SocketRepository.callMaker
         if (incoming && senderId !== null) {

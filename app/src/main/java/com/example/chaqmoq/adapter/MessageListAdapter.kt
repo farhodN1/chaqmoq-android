@@ -2,9 +2,6 @@ package com.example.chaqmoq.adapter
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.media.MediaPlayer
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -21,15 +18,14 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.chaqmoq.R
 import com.example.chaqmoq.databinding.MessageItemBinding
 import com.example.chaqmoq.model.Message
-import com.example.chaqmoq.ui.customViews.WaveformView
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import org.threeten.bp.Instant
 import org.threeten.bp.LocalDateTime
 import org.threeten.bp.ZoneId
 import org.threeten.bp.format.DateTimeFormatter
-import java.io.File
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import kotlin.math.absoluteValue
+import android.os.Handler
+import android.os.Looper
 
 class MessageListAdapter(private val userData: SharedPreferences, private val context: Context) :
     ListAdapter<Message, MessageListAdapter.MessageViewHolder>(MessageDiffCallback()) {
@@ -55,21 +51,25 @@ class MessageListAdapter(private val userData: SharedPreferences, private val co
         recyclerView.postDelayed({
             recyclerView.scrollToPosition(itemCount - 1)
         }, 100)
-
     }
 
 
     class MessageViewHolder(private val binding: MessageItemBinding, private val context: Context) :
         RecyclerView.ViewHolder(binding.root) {
+
         private var exoPlayer: ExoPlayer? = null
         fun bind(message: Message, userData: SharedPreferences) {
             val hostId = userData.getString("nickname", null)
             val localZoneId = ZoneId.systemDefault()
             Log.d("check m type", message.message_type.toString())
-            if (message.message_type !== null) {
+            if (message.message_type == "audio") {
                 binding.messageBlock.visibility = View.GONE
                 binding.voiceMessageBlock.visibility = View.VISIBLE
                 binding.voiceSendTime.text = message.send_time
+                if (message.amplitudes !== null && message.amplitudes !== "") {
+                    val amps: List<Float> = Gson().fromJson(message.amplitudes, object : TypeToken<List<Float>>() {}.type)
+                    if (!amps.isEmpty()) binding.waveformView.setWaveform(amps)
+                }
                 binding.playBtn.setOnClickListener {
                     exoPlayer?.release()
 
@@ -79,17 +79,25 @@ class MessageListAdapter(private val userData: SharedPreferences, private val co
                         player.setMediaItem(mediaItem)
                         player.prepare()
                         player.play()
-
-//                        val waveformView: WaveformView = binding.waveformView
-//                        val amplitudes = readPcmAmplitudes(message.message)
-//                        waveformView.setAmplitudes(amplitudes)
-
+                        val handleProgress = Handler(Looper.getMainLooper())
                         player.addListener(object : Player.Listener {
                             override fun onPlaybackStateChanged(state: Int) {
                                 if (state == Player.STATE_READY) {
-                                    Log.d("ExoPlayer", "Playing")
+                                    Log.d("ready", player.currentPosition.toString())
+                                    val runnable = object : Runnable {
+                                        override fun run() {
+                                            if (player.isPlaying) {
+                                                val currentPosition = player.currentPosition
+                                                val progress = currentPosition.toFloat()
+                                                binding.waveformView.setProgress(progress)
+                                                handleProgress.postDelayed(this, 50)
+                                            }
+                                        }
+                                    }
+                                    handleProgress.post(runnable)
                                 } else if (state == Player.STATE_ENDED) {
                                     Log.d("ExoPlayer", "Playback finished")
+                                    binding.waveformView.setProgress(1.0f)
                                     player.release()
                                 }
                             }
@@ -98,7 +106,9 @@ class MessageListAdapter(private val userData: SharedPreferences, private val co
                 }
 
             }
-            else {
+            else if (message.message_type == "text") {
+                binding.messageBlock.visibility = View.VISIBLE
+                binding.voiceMessageBlock.visibility = View.GONE
                 if (message.send_time != null) {
                     val utcInstant = Instant.parse(message.send_time)
                     val localZonedDateTime = utcInstant.atZone(localZoneId)
@@ -133,25 +143,10 @@ class MessageListAdapter(private val userData: SharedPreferences, private val co
 
 
         }
-        fun readPcmAmplitudes(filePath: String): List<Int> {
-            val amplitudes = mutableListOf<Int>()
-            val file = File(filePath)
-            val inputStream = file.inputStream()
-            val buffer = ByteArray(2) // Buffer for 16-bit samples
-
-            while (inputStream.read(buffer) == 2) {
-                // Convert 2 bytes to a 16-bit signed sample
-                val sample = ByteBuffer.wrap(buffer)
-                    .order(ByteOrder.LITTLE_ENDIAN)
-                    .short.toInt() // Convert to Int to avoid overflow
-                amplitudes.add(sample.absoluteValue)
-            }
-
-            inputStream.close()
-            return amplitudes
-        }
 
     }
+
+
 
     class MessageDiffCallback : DiffUtil.ItemCallback<Message>() {
         override fun areItemsTheSame(oldItem: Message, newItem: Message): Boolean {

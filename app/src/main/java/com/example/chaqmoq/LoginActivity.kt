@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import com.auth0.android.Auth0
 import com.auth0.android.authentication.AuthenticationAPIClient
 import com.auth0.android.authentication.AuthenticationException
@@ -85,9 +86,8 @@ class LoginActivity : Activity() {
             try {
                 val gson = Gson()
                 val userInfo = gson.toJson(userData)
-                val ip = SocketRepository.ip
                 Log.d("req", userInfo)
-                val response = myHttpClient.postRequest(ip +"/loggedin", userInfo)
+                val response = myHttpClient.postRequest("loggedin", userInfo)
                 Log.d("responce", response)
                 // Check if the response from the backend is "successful"
                 if (response == "successful") {
@@ -111,8 +111,10 @@ class LoginActivity : Activity() {
                 }
             } catch (e: JSONException) {
                 Log.e("MyTag", "JSON Error: ${e.message}")
+//                Toast.makeText(applicationContext, "Login not successful, please try again", Toast.LENGTH_SHORT)
             } catch (e: Exception) {
                 Log.e("MyTag", "Error: ${e.message}")
+//                Toast.makeText(applicationContext, "Login not successful, please try again", Toast.LENGTH_SHORT)
             }
         }
     }
