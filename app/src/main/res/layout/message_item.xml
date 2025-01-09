@@ -49,7 +49,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="80dp"
                 android:padding="10dp"
-                android:background="@drawable/background_send_message"
+                android:background="@drawable/background_receive_message"
                 android:layout_marginTop="10dp"
                 android:visibility="visible"
                 android:orientation="horizontal">
@@ -61,7 +61,19 @@
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:src="@drawable/play_btn"
                     android:layout_marginRight="10dp"
+                    android:visibility="visible"
                     android:layout_gravity="center_vertical"/>
+
+                <ImageButton
+                    android:id="@+id/pause_btn"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/pause_icon"
+                    android:layout_marginRight="10dp"
+                    android:visibility="gone"
+                    android:layout_gravity="center_vertical"/>
+
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="match_parent"

@@ -43,6 +43,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Username"
+                android:textColor="@color/white"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -50,6 +51,7 @@
                 android:id="@+id/status"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:textColor="@color/white"
                 android:text="Last seen: 10 mins ago"
                 android:textSize="14sp" />
 
@@ -90,6 +92,7 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         tools:listitem="@layout/message_item"
+        android:paddingHorizontal="10dp"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
         app:layout_constraintBottom_toTopOf="@id/messageInputLayout"
         app:layout_constraintEnd_toEndOf="parent"

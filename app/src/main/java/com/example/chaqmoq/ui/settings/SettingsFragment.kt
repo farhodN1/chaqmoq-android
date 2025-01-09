@@ -22,12 +22,6 @@ class SettingsFragment : Fragment() {
     ): View {
         _binding = FragmentSettingsBinding.inflate(inflater, container, false)
         val root: View = binding.root
-        binding.saveIP.setOnClickListener {
-            val ip = binding.serverAddress.text
-            SocketRepository.ip = ip.toString()
-            Log.d("ip saved", SocketRepository.ip)
-        }
-
         return root
     }
 

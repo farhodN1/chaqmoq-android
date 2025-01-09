@@ -26,6 +26,7 @@ import org.threeten.bp.ZoneId
 import org.threeten.bp.format.DateTimeFormatter
 import android.os.Handler
 import android.os.Looper
+import com.example.news.utils.DateTimeUtils.getRelativeTime
 
 class MessageListAdapter(private val userData: SharedPreferences, private val context: Context) :
     ListAdapter<Message, MessageListAdapter.MessageViewHolder>(MessageDiffCallback()) {
@@ -65,7 +66,15 @@ class MessageListAdapter(private val userData: SharedPreferences, private val co
             if (message.message_type == "audio") {
                 binding.messageBlock.visibility = View.GONE
                 binding.voiceMessageBlock.visibility = View.VISIBLE
-                binding.voiceSendTime.text = message.send_time
+                binding.voiceSendTime.text = getRelativeTime(message.send_time)
+                val params = binding.voiceMessageBlock.layoutParams as LinearLayout.LayoutParams
+                if (message.sender_id == hostId) {
+                    params.gravity = Gravity.START
+                    binding.messageBlock.background = ContextCompat.getDrawable(context, R.drawable.background_send_message)
+                } else {
+                    params.gravity = Gravity.END
+                    binding.messageBlock.background = ContextCompat.getDrawable(context, R.drawable.background_receive_message)
+                }
                 if (message.amplitudes !== null && message.amplitudes !== "") {
                     val amps: List<Float> = Gson().fromJson(message.amplitudes, object : TypeToken<List<Float>>() {}.type)
                     if (!amps.isEmpty()) binding.waveformView.setWaveform(amps)
@@ -79,16 +88,22 @@ class MessageListAdapter(private val userData: SharedPreferences, private val co
                         player.setMediaItem(mediaItem)
                         player.prepare()
                         player.play()
+
+
                         val handleProgress = Handler(Looper.getMainLooper())
                         player.addListener(object : Player.Listener {
                             override fun onPlaybackStateChanged(state: Int) {
                                 if (state == Player.STATE_READY) {
-                                    Log.d("ready", player.currentPosition.toString())
+                                    binding.pauseBtn.visibility = View.VISIBLE
+                                    binding.playBtn.visibility = View.GONE
                                     val runnable = object : Runnable {
                                         override fun run() {
                                             if (player.isPlaying) {
                                                 val currentPosition = player.currentPosition
-                                                val progress = currentPosition.toFloat()
+                                                Log.d("currentPosition", currentPosition.toFloat().toString())
+                                                Log.d("duration", player.duration.toString())
+                                                val progress = currentPosition.toFloat() / player.duration
+                                                Log.d("progress", progress.toString())
                                                 binding.waveformView.setProgress(progress)
                                                 handleProgress.postDelayed(this, 50)
                                             }
@@ -97,7 +112,9 @@ class MessageListAdapter(private val userData: SharedPreferences, private val co
                                     handleProgress.post(runnable)
                                 } else if (state == Player.STATE_ENDED) {
                                     Log.d("ExoPlayer", "Playback finished")
-                                    binding.waveformView.setProgress(1.0f)
+                                    binding.pauseBtn.visibility = View.GONE
+                                    binding.playBtn.visibility = View.VISIBLE
+                                    binding.waveformView.setProgress(0.0f)
                                     player.release()
                                 }
                             }
@@ -110,18 +127,7 @@ class MessageListAdapter(private val userData: SharedPreferences, private val co
                 binding.messageBlock.visibility = View.VISIBLE
                 binding.voiceMessageBlock.visibility = View.GONE
                 if (message.send_time != null) {
-                    val utcInstant = Instant.parse(message.send_time)
-                    val localZonedDateTime = utcInstant.atZone(localZoneId)
-                    val localDateTime = localZonedDateTime.toLocalDateTime()
-                    val dt = LocalDateTime.parse(localDateTime.toString(), DateTimeFormatter.ISO_DATE_TIME)
-                    val year = dt.year
-                    val month = dt.month
-                    val day = dt.monthValue
-
-                    val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-                    val timeFormatter2 = DateTimeFormatter.ofPattern("MM-dd")
-                    val time = dt.format(timeFormatter)
-                    val dayAndMonth = dt.format(timeFormatter2)
+                    val time = getRelativeTime(message.send_time)
 
                     binding.sendTime.text = time
 
@@ -145,8 +151,6 @@ class MessageListAdapter(private val userData: SharedPreferences, private val co
         }
 
     }
-
-
 
     class MessageDiffCallback : DiffUtil.ItemCallback<Message>() {
         override fun areItemsTheSame(oldItem: Message, newItem: Message): Boolean {

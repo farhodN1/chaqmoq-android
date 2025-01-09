@@ -12,7 +12,7 @@ import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
 
 object SocketRepository {
-    var ip: String = "http://192.168.187.115:5000"
+    var ip: String = "http://192.168.1.101:5000"
     val socket: Socket = IO.socket("${ip}")
     var callMaker: String? = null
 

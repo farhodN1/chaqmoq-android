@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.util.AttributeSet
+import android.util.Log
 import android.view.View
 
 class WaveformView @JvmOverloads constructor(
@@ -30,6 +31,7 @@ class WaveformView @JvmOverloads constructor(
     }
 
     fun setProgress(value: Float) {
+//        Log.d("progress", value.toString())
         progress = value
         invalidate()
     }
@@ -44,7 +46,6 @@ class WaveformView @JvmOverloads constructor(
         waveform.forEachIndexed { index, amplitude ->
             val x = index * widthPerSample
             val y = centerY - amplitude * height / 2
-
             val paint = if (index < progress * waveform.size) progressPaint else paint
             canvas.drawLine(x, centerY, x, y, paint)
         }

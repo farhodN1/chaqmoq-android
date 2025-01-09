@@ -49,6 +49,8 @@ class TargetUserFragment : Fragment(){
     private lateinit var filePath: String
     lateinit var file: String
     var isRecordingStopped: Boolean = true
+    val animationHandler = Handler(Looper.getMainLooper())
+    var isMediaRecorderRunning = false
 
 
     private val hostData: SharedPreferences by lazy {
@@ -216,10 +218,10 @@ class TargetUserFragment : Fragment(){
     }
 
     private fun startRecording() {
+        animationHandler.removeCallbacksAndMessages(null)
         isRecordingStopped = false
         file = "voice_message_${System.currentTimeMillis()}.m4a"
         filePath = "${context?.externalCacheDir?.absolutePath}/${file}"
-
         mediaRecorder = MediaRecorder().apply {
             setAudioSource(MediaRecorder.AudioSource.MIC)
             setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
@@ -227,9 +229,10 @@ class TargetUserFragment : Fragment(){
             setOutputFile(filePath)
             prepare()
             start()
+            isMediaRecorderRunning = true
         }
         Log.d("voice", "Recording started")
-//        startAnimation(binding.animationCircle)
+        startAnimation(binding.animationCircle)
     }
 
     private fun stopRecording() {
@@ -238,6 +241,8 @@ class TargetUserFragment : Fragment(){
         mediaRecorder.apply {
             stop()
             release()
+            isMediaRecorderRunning = false
+
         }
         val uri = "file:///storage/emulated/0/Android/data/com.example.chaqmoq/cache/${file}"
         val amps = extractWaveformFromAudioFile(filePath)
@@ -304,18 +309,21 @@ class TargetUserFragment : Fragment(){
     }
 
     private fun startAnimation(view: View) {
-        Timer().scheduleAtFixedRate(object : TimerTask() {
+        val handler = Handler(Looper.getMainLooper())
+        val runnable = object : Runnable {
             override fun run() {
-                val scale =
-                    1.0f + (mediaRecorder.maxAmplitude / 3000.0f) // Scale factor based on amplitude
-                Handler(Looper.getMainLooper()).post {
+                if (isMediaRecorderRunning) {
+                    val scale = 1.0f + (mediaRecorder.maxAmplitude / 3000.0f)
                     view.animate()
                         .scaleX(scale)
                         .scaleY(scale)
                         .setDuration(100)
                         .start()
+
+                    handler.postDelayed(this, 100)
                 }
             }
-        }, 0, 100) // Update every 100ms
+        }
+        handler.post(runnable)
     }
 }
