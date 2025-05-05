@@ -94,7 +94,7 @@ class IncomingCallAlert {
             stopRingtone()
             isViewAdded = false
         }
-        if (Settings.canDrawOverlays(context) ) {
+        if (Settings.canDrawOverlays(context)) {
             Log.d("isViewAdded", isViewAdded.toString())
             if (isViewAdded == false) {
                 isViewAdded = true

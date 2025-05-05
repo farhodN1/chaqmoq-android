@@ -1,4 +1,4 @@
-package com.example.chaqmoq.ui.callsFragment
+package com.example.chaqmoq.ui.calls
 
 import android.os.Bundle
 import android.view.LayoutInflater

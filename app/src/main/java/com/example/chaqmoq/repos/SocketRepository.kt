@@ -2,6 +2,9 @@ package com.example.chaqmoq.repos
 
 import android.content.Context
 import android.util.Log
+import com.example.chaqmoq.utils.GlobalVariables.host
+import com.example.chaqmoq.utils.GlobalVariables.ip
+import com.example.chaqmoq.utils.GlobalVariables.target
 import io.socket.client.IO
 import io.socket.client.Socket
 import org.json.JSONException
@@ -12,13 +15,10 @@ import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
 
 object SocketRepository {
-    var ip: String = "http://192.168.1.101:5000"
+
     val socket: Socket = IO.socket("${ip}")
-    var callMaker: String? = null
 
     fun onSocketConnection(context: Context) {
-        val hostId = context.getSharedPreferences("UserInfo", Context.MODE_PRIVATE).getString("nickname", null)
-        val targetId = context.getSharedPreferences("TargetInfo", Context.MODE_PRIVATE).getString("id", null)
 
         socket.connect()
 
@@ -48,8 +48,8 @@ object SocketRepository {
                         override fun onCreateSuccess(p0: SessionDescription?) {}
                         override fun onSetSuccess() {
                             Log.d("RTC", "Remote offer set successfully")
-                            if (hostId !== null && targetId !== null) {
-                                WebRTCRepository.createAnswer(hostId, targetId)
+                            if (host?.id !== null && target?.id !== null) {
+                                WebRTCRepository.createAnswer(host!!.id, target!!.id)
                             }
                         }
                         override fun onCreateFailure(p0: String?) {
@@ -77,8 +77,8 @@ object SocketRepository {
                             override fun onCreateSuccess(p0: SessionDescription?) {}
                             override fun onSetSuccess() {
                                 Log.d("RTC", "Remote answer set successfully")
-                                if (hostId !== null && targetId !== null) {
-                                    WebRTCRepository.createAnswer(hostId, targetId)
+                                if (host?.id !== null && target?.id !== null) {
+                                    WebRTCRepository.createAnswer(host!!.id, target!!.id)
                                 }
                             }
                             override fun onCreateFailure(p0: String?) {

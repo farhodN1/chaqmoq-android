@@ -9,6 +9,8 @@ import androidx.navigation.ui.setupWithNavController
 import androidx.appcompat.app.AppCompatActivity
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Handler
 import android.provider.Settings
@@ -18,8 +20,11 @@ import android.widget.Toast
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.map
 import com.example.chaqmoq.databinding.ActivityMainBinding
+import com.example.chaqmoq.model.User
 import com.example.chaqmoq.repos.SocketRepository
-import com.example.chaqmoq.ui.home.HomeViewModel
+import com.example.chaqmoq.ui.chat.ChatViewModel
+import com.example.chaqmoq.utils.GlobalVariables.callMaker
+import com.example.chaqmoq.utils.GlobalVariables.host
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.jakewharton.threetenabp.AndroidThreeTen
 import com.permissionx.guolindev.PermissionX
@@ -29,41 +34,53 @@ import org.json.JSONObject
 class MainActivity : AppCompatActivity() {
     private lateinit var appBarConfiguration: AppBarConfiguration
     private lateinit var binding: ActivityMainBinding
-    var homeViewModel: HomeViewModel? = null
+    var homeViewModel: ChatViewModel? = null
     var userId: String? = null
     val incomingCallAlert = IncomingCallAlert()
     val socket = SocketRepository.socket
     val lastSeenTime = System.currentTimeMillis()
     var lastSeenData: JSONObject? = null
+    private lateinit var networkReceiver: NetworkReceiver
+
+    companion object {
+        private var appContext: Context? = null
+        fun getAppContext(): Context {
+            return appContext ?: throw IllegalStateException("Application context not initialized.")
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        userId = getSharedPreferences("UserInfo", Context.MODE_PRIVATE).getString("nickname", null)
+        appContext = this
+        val userInfo = getSharedPreferences("UserInfo", Context.MODE_PRIVATE)
+        userId = userInfo.getString("id", "")
+        val userName = userInfo.getString("username", "")
+        val userEmail = userInfo.getString("email", "")
+        val userProfilePicture = userInfo.getString("pictureURL", "")
+        Log.d("userId", userId!!)
+        host = User(userId!!, userName!!, userEmail, userProfilePicture, null, null, null)
         redirect()
         AndroidThreeTen.init(this)
         socket.connect()
-        if (!Settings.canDrawOverlays(this)) {
-            requestOverlayPermission()
-        }
+        networkReceiver = NetworkReceiver()
+        val filter = IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION)
+        registerReceiver(networkReceiver, filter)
+        homeViewModel = ViewModelProvider(this).get(ChatViewModel::class.java)
 
-        homeViewModel = ViewModelProvider(this).get(HomeViewModel::class.java)
-
-        lastSeenData = JSONObject().apply {
-            put("userId", userId)
-            put("time", lastSeenTime.toString())
-        }
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         setupNavigation()
         requestPermissions()
-        if (userId !== null) {
+
+        if (!Settings.canDrawOverlays(this)) {
+            requestOverlayPermission()
+        }
+        if (userId !== "") {
             initializeSocket()
         }
 
         val callType = intent.getStringExtra("callType")
-        Log.d("callType", callType.toString())
         if (callType == "video" || callType == "audio") {
-            Log.d("navigation to", "nav_call")
             val navController = findNavController(R.id.nav_host_fragment_activity_main)
             val bundle = Bundle().apply {
                 putBoolean("incoming", true)
@@ -81,7 +98,6 @@ class MainActivity : AppCompatActivity() {
 
 
         val redirToTarget = intent.getStringExtra("url") ?: null
-        Log.d("usernameOf", redirToTarget.toString())
         if (redirToTarget !== null) {
             homeViewModel?.userList?.observe(this) {
                 goToTargetUser("https://lh3.googleusercontent.com/a/ACg8ocJOHyhKnjI8sULVur_PATMGYCYPwL8ou_F-BaPa9KT2-G9JIQ=s96-c")
@@ -95,8 +111,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun redirect() {
-        if (userId == null) {
-            val intent = Intent(this, LoginActivity::class.java)
+        val isLoggedIn: Boolean = getSharedPreferences("UserInfo", Context.MODE_PRIVATE).getBoolean("isLoggedIn", false)
+        if (!isLoggedIn) {
+            val intent = Intent(this, AuthorizationActivity::class.java)
             startActivity(intent)
         }
     }
@@ -122,7 +139,7 @@ class MainActivity : AppCompatActivity() {
     private fun goToTargetUser(url: String) {
         val targetData = getSharedPreferences("TargetInfo", Context.MODE_PRIVATE)
 
-        val homeViewModel = HomeViewModel()
+        val homeViewModel = ChatViewModel()
         val mappedUserList = homeViewModel.userList.map { users ->
             users.map { user ->  {
                 if (user.profilePicture == url) {
@@ -137,7 +154,7 @@ class MainActivity : AppCompatActivity() {
                         apply()
                     }
                 }
-            }} // Example transformation
+            }}
         }
 
         val navController = findNavController(R.id.nav_host_fragment_activity_main)
@@ -170,19 +187,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun initializeSocket() {
-        Log.d("on", "initialize socket")
         socket.connect()
-        if (userId !== null) socket.emit("socket id", userId)
+        if (userId !== null) {
+            Log.d("socket", "emitting socket id")
+            socket.emit("socket id", userId)
+        }
         var navController = findNavController(R.id.nav_host_fragment_activity_main)
         socket.on("audioCall") {msg ->
             SocketRepository.onSocketConnection(this)
             if (msg.isNotEmpty()) {
-                Log.d("farhod", "${ msg[0] }")
                 val data = JSONObject(msg[0].toString())
                 val sender = data.optString("sender")
                 val image = data.optString("image")
-                Log.d("socket", "audioCall ${sender}")
-                SocketRepository.callMaker = sender
+                callMaker = sender
                 runOnMainThread {
                     incomingCallAlert.showWindow(this, sender, image, "audio", navController)
                 }
@@ -197,7 +214,7 @@ class MainActivity : AppCompatActivity() {
                 val sender = data.optString("sender")
                 val image = data.optString("image")
                 Log.d("socket", "call ${sender}")
-                SocketRepository.callMaker = sender
+                callMaker = sender
                 runOnMainThread{
                     incomingCallAlert.showWindow(this, sender, image, "video", navController)
                 }
@@ -215,11 +232,15 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         socket.disconnect()
         super.onDestroy()
+        unregisterReceiver(networkReceiver)
     }
 
     override fun onStop() {
         super.onStop()
-        Log.d("on", "stop");
+        lastSeenData = JSONObject().apply {
+            put("userId", host?.id)
+            put("time", lastSeenTime.toString())
+        }
         if (userId !== null) {
             socket.emit("lastSeen", lastSeenData)
         }

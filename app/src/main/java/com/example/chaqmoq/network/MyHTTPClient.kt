@@ -1,6 +1,7 @@
 package com.example.chaqmoq.network
 
 import com.example.chaqmoq.repos.SocketRepository
+import com.example.chaqmoq.utils.GlobalVariables.ip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -9,11 +10,12 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
 class MyHTTPClient {
-    suspend fun getRequest(urlString: String): String {
+    val serverAddr = ip
+    suspend fun getRequest(endpoint: String): String {
         return withContext(Dispatchers.IO) {
             val client = OkHttpClient()
             val request = Request.Builder()
-                .url(urlString)
+                .url(serverAddr + endpoint)
                 .build()
 
             val response = client.newCall(request).execute()
@@ -22,7 +24,6 @@ class MyHTTPClient {
     }
 
     suspend fun postRequest(endpoint: String, requestBody: String): String {
-        val serverAddr = SocketRepository.ip
         return withContext(Dispatchers.IO) {
             val client = OkHttpClient()
             val mediaType = "application/json; charset=utf-8".toMediaType()

@@ -1,4 +1,4 @@
-package com.example.chaqmoq.ui.home
+package com.example.chaqmoq.ui.chat
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -9,26 +9,26 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.viewModels
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.request.RequestOptions
 import com.bumptech.glide.Glide
-import com.example.chaqmoq.MainActivity
-import com.example.chaqmoq.databinding.FragmentHomeBinding
 import com.example.chaqmoq.adapter.UserListAdapter
-import com.example.chaqmoq.ui.targetUser.TargetUserViewModel
+import com.example.chaqmoq.databinding.FragmentChatBinding
+import com.example.chaqmoq.repos.DatabaseRepository.saveUsers
+import com.example.chaqmoq.utils.GlobalVariables
+import com.example.chaqmoq.utils.GlobalVariables.target
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
-class HomeFragment : Fragment() {
-    private var _binding: FragmentHomeBinding? = null
+class ChatFragment : Fragment() {
+    private var _binding: FragmentChatBinding? = null
     private val binding get() = _binding!!
     private lateinit var userListAdapter: UserListAdapter
-
-    private val hostData: SharedPreferences by lazy {
-        requireActivity().getSharedPreferences("UserInfo", Context.MODE_PRIVATE)
-    }
+    private lateinit var homeViewModel: ChatViewModel
 
     private val targetData: SharedPreferences by lazy {
         requireActivity().getSharedPreferences("TargetInfo", Context.MODE_PRIVATE)
@@ -39,28 +39,23 @@ class HomeFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        val homeViewModel = ViewModelProvider(this).get(HomeViewModel::class.java)
-        _binding = FragmentHomeBinding.inflate(inflater, container, false)
+        homeViewModel = ViewModelProvider(this).get(ChatViewModel::class.java)
+        homeViewModel.fetchUsers()
+        _binding = FragmentChatBinding.inflate(inflater, container, false)
         val root: View = binding.root
-        val givenName = hostData.getString("givenName", null)
-        val picture = hostData.getString("pictureUrl", null)
-        if (givenName !== null) {
-            Glide.with(requireContext())
-                .load(picture)
-                .apply(RequestOptions.circleCropTransform())
-                .placeholder(R.drawable.roundimage_placeholder)
-                .into(binding.hostImage)
-        }
+
+        Glide.with(requireContext())
+            .load(GlobalVariables.host?.profilePicture)
+            .apply(RequestOptions.circleCropTransform())
+            .placeholder(R.drawable.roundimage_placeholder)
+            .into(binding.hostImage)
+
         val recyclerView: RecyclerView = binding.recyclerView
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
-        binding.reloadBtn.setOnClickListener {
-            Log.d("reload", "clicked")
-            homeViewModel.makeNetworkRequest()
-        }
         userListAdapter = UserListAdapter { user ->
             Log.d("HomeFragment", "Clicked user: ${user.username}")
             findNavController().navigate(R.id.target_user)
-
+            target = user
             with(targetData.edit()) {
                 putString("id", user.id)
                 putString("username", user.username)
@@ -73,16 +68,27 @@ class HomeFragment : Fragment() {
             }
         }
         recyclerView.adapter = userListAdapter
-        val hostId = hostData.getString("nickname", null)
-        homeViewModel.userList.observe(viewLifecycleOwner) { userList ->
-            binding.reloadBtn.visibility = View.GONE
-            val filteredList = userList.filter { user ->
-                user.id != hostId
-            }
-            userListAdapter.submitList(filteredList)
+
+        binding.swipeRefreshLayout.setOnRefreshListener {
+            homeViewModel.fetchUsers()
         }
 
+        homeViewModel.userList.observe(viewLifecycleOwner) { userList ->
+            binding.progressBar.visibility = View.GONE
+            binding.swipeRefreshLayout.isRefreshing = false
+            val filteredList = userList.filter { user ->
+                user.id != GlobalVariables.host?.id
+            }
+            userListAdapter.submitList(filteredList)
+            viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    saveUsers(userList)
+                } catch (e: Exception) {
+                    Log.d("error", "can't save users")
+                }
 
+            }
+        }
         return root
     }
 

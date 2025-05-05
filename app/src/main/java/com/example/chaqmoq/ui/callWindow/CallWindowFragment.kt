@@ -21,6 +21,7 @@ import com.example.chaqmoq.databinding.CallWindowBinding
 import com.example.chaqmoq.repos.SocketRepository
 import com.example.chaqmoq.repos.WebRTCRepository
 import org.json.JSONObject
+import com.example.chaqmoq.utils.GlobalVariables.callMaker
 
 class CallWindowFragment : Fragment() {
 
@@ -40,25 +41,21 @@ class CallWindowFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        Log.d("call", "CallWindowFragment initilized")
         _binding = CallWindowBinding.inflate(inflater, container, false)
         val root: View = binding.root
         SocketRepository.onSocketConnection(requireContext());
         WebRTCRepository.initializePeerConnectionFactory(requireContext())
         val incoming = arguments?.getBoolean("incoming") ?: false
-        Log.d("call", "is it incoming $incoming")
         val callType = arguments?.getString("callType")
         val hostId = hostData.getString("nickname", null)
         val targetId = targetData.getString("id", null)
         val targetUserName = targetData.getString("givenName", "Unknown")
-        Log.d("type of call", callType.toString())
         if (callType == "video") {
             WebRTCRepository.initializePeerConnection(requireContext(), binding.remoteView, binding.localView, false)
         } else {
             WebRTCRepository.initializePeerConnection(requireContext(), binding.remoteView, binding.localView, true)
         }
         if (callType == "video") {
-            Log.d("call", "emitting video call")
             if (!incoming) {
                 SocketRepository.socket.emit("videoCall", JSONObject().apply {
                     put("sender", hostId)
@@ -73,7 +70,6 @@ class CallWindowFragment : Fragment() {
             binding.userNameInVideo.text = targetUserName
 
         } else if (callType == "audio") {
-            Log.d("call", "emitting video call")
             if (!incoming) {
                 SocketRepository.socket.emit("audioCall", JSONObject().apply {
                     put("sender", hostId)
@@ -100,8 +96,7 @@ class CallWindowFragment : Fragment() {
             }
         }
 
-        Log.d("socket connection status", SocketRepository.socket.connected().toString())
-        val senderId = SocketRepository.callMaker
+        val senderId = callMaker
         if (incoming && senderId !== null) {
             SocketRepository.socket.emit("respond", JSONObject().apply {
                 put("sender", senderId)
@@ -110,7 +105,6 @@ class CallWindowFragment : Fragment() {
             handler.post(runnable)
         } else {
             playRingtone()
-            Log.d("RTC", "listening for respond")
             SocketRepository.socket.on("respond") {args ->
                 Log.d("response", "received")
                 stopRingtone()
@@ -205,7 +199,6 @@ class CallWindowFragment : Fragment() {
         }
 
         SocketRepository.socket.on("endCall") {
-            Log.d("ending", "current call ${_binding}")
             endCall()
         }
 
@@ -235,7 +228,6 @@ class CallWindowFragment : Fragment() {
     }
 
     fun playRingtone() {
-        // Ensure ringback tone file is present in res/raw
         val ringbackUri = Uri.parse("android.resource://${requireContext().packageName}/raw/ring")
         player = MediaPlayer.create(context, ringbackUri).apply {
             isLooping = true
@@ -275,10 +267,10 @@ class CallWindowFragment : Fragment() {
             speakerButton.animate().scaleX(0.7f).scaleY(0.7f).setDuration(150).withEndAction {
                 // Update the drawable after the animation
                 val drawableRes = if (isSpeakerOn) {
-                    speakerButton.backgroundTintList = ContextCompat.getColorStateList(requireContext(), androidx.cardview.R.color.cardview_dark_background)
+                    speakerButton.backgroundTintList = ContextCompat.getColorStateList(requireContext(), R.color.white)
                     R.drawable.speaker_on
                 } else {
-                    speakerButton.backgroundTintList = ContextCompat.getColorStateList(requireContext(), androidx.cardview.R.color.cardview_light_background)
+                    speakerButton.backgroundTintList = ContextCompat.getColorStateList(requireContext(), R.color.black)
                     R.drawable.speaker_off
                 }
                 speakerButton.setImageResource(drawableRes)

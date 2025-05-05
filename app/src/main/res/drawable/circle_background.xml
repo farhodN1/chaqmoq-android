@@ -5,7 +5,7 @@
         android:top="2px"
         android:bottom="2px">
         <shape android:shape="oval">
-            <solid android:color="@color/white"/>
+            <solid android:color="@color/light"/>
         </shape>
     </item>
 </layer-list>

@@ -1,47 +1,38 @@
-package com.example.chaqmoq.ui.home
+package com.example.chaqmoq.ui.chat
 
-import android.content.ContentProvider
-import android.content.Context
-import android.content.SharedPreferences
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.util.Log
-import androidx.core.content.ContentProviderCompat.requireContext
-import androidx.lifecycle.ViewModelProvider
 import com.example.chaqmoq.model.User
 import com.example.chaqmoq.network.MyHTTPClient
-import com.example.chaqmoq.repos.SocketRepository
+import com.example.chaqmoq.repos.DatabaseRepository.getAllUsers
 import kotlinx.coroutines.launch
 import org.json.JSONException
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.Dispatchers
 
 
-class HomeViewModel : ViewModel() {
+class ChatViewModel : ViewModel() {
     private val myHttpClient = MyHTTPClient()
     private val _userList = MutableLiveData<List<User>>()
     val userList: LiveData<List<User>> get() = _userList
-    init {
-        makeNetworkRequest()
-    }
 
-    fun makeNetworkRequest() {
-        val ip = SocketRepository.ip
-        viewModelScope.launch {
+    fun fetchUsers() {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                val response = myHttpClient.getRequest("${ip}/userlist")
-                Log.d("response", response)
+                val response = myHttpClient.getRequest("/userlist")
                 val usersMap: Map<String, User> = Gson().fromJson(response, object : TypeToken<Map<String, User>>() {}.type)
-                Log.d("userMap", usersMap.toString())
                 val userList: List<User> = usersMap.values.toList()
                 _userList.postValue(userList)
-                Log.i("list",   "list: $userList")
             } catch (e: JSONException) {
-                Log.e("messages", "JSON Error: ${e.message}")
+                _userList.postValue(getAllUsers())
+                Log.e("log", "JSON Error: ${e.message}")
             } catch (e: Exception) {
-                Log.e("messages", "Error: ${e.message}")
+                _userList.postValue(getAllUsers())
+                Log.e("log", "Error: ${e.message}")
             }
         }
     }

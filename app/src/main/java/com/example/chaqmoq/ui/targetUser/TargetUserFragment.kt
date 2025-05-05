@@ -1,6 +1,8 @@
 package com.example.chaqmoq.ui.targetUser
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.media.MediaExtractor
 import android.media.MediaFormat
@@ -17,8 +19,11 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.findNavController
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -29,14 +34,21 @@ import com.example.chaqmoq.IncomingCallAlert
 import com.example.chaqmoq.R
 import com.example.chaqmoq.adapter.MessageListAdapter
 import com.example.chaqmoq.databinding.TargetUserBinding
+import com.example.chaqmoq.model.Message
+import com.example.chaqmoq.repos.DatabaseRepository.saveMessage
+import com.example.chaqmoq.repos.DatabaseRepository.saveMessages
 import com.example.chaqmoq.repos.SocketRepository
-import com.google.firebase.storage.FirebaseStorage
+import com.example.chaqmoq.utils.Firebase.uploadFileToFirestore
+import com.example.chaqmoq.utils.GlobalVariables
+import com.example.chaqmoq.utils.GlobalVariables.target
+import com.example.news.utils.NetworkUtils.isInternetAvailable
 import com.google.gson.Gson
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.threeten.bp.Instant
 import java.nio.ByteBuffer
-import java.util.Timer
-import java.util.TimerTask
+import java.util.UUID
 import kotlin.math.abs
 
 
@@ -51,29 +63,70 @@ class TargetUserFragment : Fragment(){
     var isRecordingStopped: Boolean = true
     val animationHandler = Handler(Looper.getMainLooper())
     var isMediaRecorderRunning = false
-
-
-    private val hostData: SharedPreferences by lazy {
-        requireActivity().getSharedPreferences("UserInfo", Context.MODE_PRIVATE)
+    private lateinit var targetUserViewModel: TargetUserViewModel
+    private val REQUEST_CODE_OPEN_DOCUMENT = 1001
+    private val filePickerLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        uri?.let {
+            // Handle the file URI
+            sendMessage("file", uri)
+        }
     }
-    private val targetData: SharedPreferences by lazy {
-        requireActivity().getSharedPreferences("TargetInfo", Context.MODE_PRIVATE)
-    }
 
+
+    @SuppressLint("ClickableViewAccessibility")
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        val targetUserViewModel =
-            ViewModelProvider(this).get(TargetUserViewModel::class.java)
-
-        val currentUTC = System.currentTimeMillis()
-
         _binding = TargetUserBinding.inflate(inflater, container, false)
+        targetUserViewModel = ViewModelProvider(this).get(TargetUserViewModel::class.java)
+        targetUserViewModel.fetchMessages(generateConId(target?.id!!, GlobalVariables.host?.id!!), requireContext())
         val root: View = binding.root
         val recyclerView: RecyclerView = binding.recyclerView
 
+        recyclerView.layoutManager = LinearLayoutManager(requireContext())
+        messageListAdapter = MessageListAdapter(GlobalVariables.host!!, requireContext())
+        binding.sendButton.setOnClickListener{sendMessage("text")}
+
+        binding.username.text = target?.username
+        setStatusAndTime(target?.lastSeen, target?.status, binding.status)
+
+        Glide.with(root)
+            .load(target?.profilePicture)
+            .placeholder(R.drawable.roundimage_placeholder)
+            .apply(RequestOptions.circleCropTransform())
+            .into(binding.userImage)
+
+        val handler = Handler(Looper.getMainLooper())
+        val stopRecorder = Runnable {
+            stopRecording()
+        }
+
+        SocketRepository.socket.on("updateMessage") {
+            if (_binding !== null) {
+                Log.d("update", "message")
+                updateMessages()
+            }
+        }
+
+        recyclerView.adapter = messageListAdapter
+
+
+        targetUserViewModel.messageList.observe(viewLifecycleOwner) { messageList ->
+            Log.d("messages", messageList.toString())
+            binding.progressBar.visibility = View.GONE
+            binding.swipeRefreshLayout.isRefreshing = false
+            lifecycleScope.launch(Dispatchers.IO) {
+                Log.d("messages", messageList.toString())
+                saveMessages(messageList)
+            }
+            messageListAdapter.submitList(messageList)
+        }
+
+        binding.swipeRefreshLayout.setOnRefreshListener {
+            targetUserViewModel.fetchMessages(generateConId(target?.id!!, GlobalVariables.host?.id!!), requireContext())
+        }
         binding.messageEditText.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
             }
@@ -89,55 +142,6 @@ class TargetUserFragment : Fragment(){
                 }
             }
         })
-        recyclerView.layoutManager = LinearLayoutManager(requireContext())
-        messageListAdapter = MessageListAdapter(hostData, requireContext())
-        binding.sendButton.setOnClickListener{sendMessage("text")}
-        val targetUserName = targetData.getString("username", null)
-        val targetUserImage = targetData.getString("pictureURL", null)
-        val targetUserLastSeen = targetData.getString("lastSeen", null)
-        val targetUserStatus = targetData.getString("status", null)
-        binding.username.text = targetUserName
-        if (targetUserStatus == "online") {
-            binding.status.text = "online"
-        } else if (targetUserLastSeen?.toIntOrNull() != null) {
-            val timeDifference = currentUTC - targetUserLastSeen.toInt()
-            val minutesAgo = timeDifference / (1000 * 60)
-            val hoursAgo = timeDifference / (1000 * 60 * 60)
-            if (minutesAgo < 60) {
-                binding.status.text = "${minutesAgo} ago"
-            } else if (hoursAgo < 24) {
-                binding.status.text = "${hoursAgo} ago"
-            }
-        }
-        Glide.with(root)
-            .load(targetUserImage)
-            .placeholder(R.drawable.roundimage_placeholder)
-            .apply(RequestOptions.circleCropTransform())
-            .into(binding.userImage)
-        val targetId = targetData.getString("id", null)
-        val hostId = hostData.getString("nickname", null)
-        val myString = targetId + hostId
-        val conversationId = myString.toList().sorted().joinToString("")
-        targetUserViewModel.makeNetworkRequest(conversationId)
-
-        SocketRepository.socket.on("updateMessage") {
-            if (_binding !== null) {
-                Log.d("update", "message")
-                targetUserViewModel.makeNetworkRequest(conversationId)
-                val plopUri = Uri.parse("android.resource://${requireContext().packageName}/raw/plop") // this is the line 100
-                player = MediaPlayer.create(context, plopUri)
-                player?.start()
-            }
-
-        }
-
-        recyclerView.adapter = messageListAdapter
-
-        targetUserViewModel.messageList.observe(viewLifecycleOwner) { messageList ->
-            Log.d("messageList", messageList.toString())
-            messageListAdapter.submitList(messageList)
-        }
-
         binding.backBtn.setOnClickListener {
             view?.findNavController()?.popBackStack()
         }
@@ -151,19 +155,13 @@ class TargetUserFragment : Fragment(){
         }
         binding.audioCallButton.setOnClickListener {
             IncomingCallAlert.isViewAdded = true
-            Log.d("users", "${hostId}, ${targetId}")
+            Log.d("users", "${GlobalVariables.host?.id}, ${target?.id}")
             val bundle = Bundle().apply {
                 putString("callType", "audio")
                 putBoolean("incoming", false)
             }
             findNavController().navigate(R.id.nav_call, bundle)
         }
-
-        val handler = Handler(Looper.getMainLooper())
-        val stopRecorder = Runnable {
-            stopRecording()
-        }
-
         binding.voiceMsgBtn.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -173,6 +171,7 @@ class TargetUserFragment : Fragment(){
                     }
                     binding.voiceMsgBtn.visibility = View.GONE
                     binding.animationCircle.visibility = View.VISIBLE
+                    binding.iconInCircle.visibility = View.VISIBLE
                     true
                 }
                 MotionEvent.ACTION_UP -> {
@@ -180,11 +179,14 @@ class TargetUserFragment : Fragment(){
 
                     binding.voiceMsgBtn.visibility = View.VISIBLE
                     binding.animationCircle.visibility = View.GONE
+                    binding.iconInCircle.visibility = View.GONE
                     true
                 }
                 else -> false
             }
         }
+        binding.sendFileBtn.setOnClickListener { pickFile() }
+
         return root
     }
 
@@ -193,27 +195,53 @@ class TargetUserFragment : Fragment(){
         _binding = null
     }
 
-    fun sendMessage(messageType: String? = null, messageInput: String? = null, amps: List<Float>? = null) {
-        val targetId = targetData.getString("id", null)
-        val hostId = hostData.getString("nickname", null)
+    fun sendMessage(messageType: String, fileUri: Uri? = null) {
         val utcInstant = Instant.now()
-        val sender = hostId
-        val recipient = targetId
-        val message = binding.messageEditText.text.toString()
-        val jsonObject = JSONObject()
-        jsonObject.put("sender", sender)
-        jsonObject.put("recipient", recipient)
-        jsonObject.put("sendTime", utcInstant)
-        if (messageType == "audio") {
-            jsonObject.put("message", messageInput)
-            jsonObject.put("message_type", messageType)
-            jsonObject.put("amplitudes", Gson().toJson(amps))
-
-        } else {
-            jsonObject.put("message", message)
-            jsonObject.put("message_type", messageType)
+        val messageExt = binding.messageEditText.text.toString()
+        lifecycleScope.launch(Dispatchers.IO) {
+            if (isInternetAvailable(requireContext())) {
+                val jsonObject = JSONObject()
+                jsonObject.put("sender", GlobalVariables.host?.id)
+                jsonObject.put("recipient", target?.id)
+                jsonObject.put("sendTime", utcInstant)
+                jsonObject.put("id", UUID.randomUUID().toString())
+                if (messageType == "audio") {
+                    val amps = extractWaveformFromAudioFile(filePath)
+                    val uri = "file:///storage/emulated/0/Android/data/com.example.chaqmoq/cache/${file}"
+                    val pathString = "VoiceMessages/voice_message_${System.currentTimeMillis()}.m4a"
+                    val cloudPath = uploadFileToFirestore(Uri.parse(uri), pathString)
+                    Log.d("cloadPath", cloudPath!!)
+                    jsonObject.put("message", cloudPath)
+                    jsonObject.put("message_type", messageType)
+                    jsonObject.put("amplitudes", Gson().toJson(amps))
+                } else if (messageType == "text") {
+                    jsonObject.put("message", messageExt)
+                    jsonObject.put("message_type", messageType)
+                } else if (messageType == "file") {
+                    val pathString = "Files/file_${System.currentTimeMillis()}.m4a"
+                    val cloudPath = uploadFileToFirestore(fileUri!!, pathString)
+                    jsonObject.put("message", cloudPath)
+                    jsonObject.put("message_type", messageType)
+                }
+                SocketRepository.socket.emit("private message", jsonObject)
+            } else {
+                if (messageType == "audio") {
+                    val amps = extractWaveformFromAudioFile(filePath)
+                    val message = Message(conId = generateConId(GlobalVariables.host?.id!!, target?.id!!), message = filePath, message_type = "audio", amplitudes = amps.toString(), receiver_id = target?.id!!, sender_id = GlobalVariables.host?.id, send_time = utcInstant.toString(), status = "pending")
+                    saveMessage(message)
+                    updateMessages()
+                } else if (messageType == "text") {
+                    val message = Message(conId = generateConId(GlobalVariables.host?.id!!, target?.id!!), message = messageExt, message_type = "text", receiver_id = target?.id!!, sender_id = GlobalVariables.host?.id, send_time = utcInstant.toString(), status = "pending")
+                    saveMessage(message)
+                    updateMessages()
+                } else if (messageType == "file") {
+                    val message = Message(conId = generateConId(GlobalVariables.host?.id!!, target?.id!!), message = fileUri.toString(), message_type = "audio", receiver_id = target?.id!!, sender_id = GlobalVariables.host?.id, send_time = utcInstant.toString(), status = "pending")
+                    saveMessage(message)
+                    updateMessages()
+                }
+            }
         }
-        SocketRepository.socket.emit("private message", jsonObject)
+
         binding.messageEditText.text = Editable.Factory.getInstance().newEditable("")
     }
 
@@ -231,42 +259,17 @@ class TargetUserFragment : Fragment(){
             start()
             isMediaRecorderRunning = true
         }
-        Log.d("voice", "Recording started")
         startAnimation(binding.animationCircle)
     }
 
     private fun stopRecording() {
-        Log.d("it's", "up")
         isRecordingStopped = true
         mediaRecorder.apply {
             stop()
             release()
             isMediaRecorderRunning = false
-
         }
-        val uri = "file:///storage/emulated/0/Android/data/com.example.chaqmoq/cache/${file}"
-        val amps = extractWaveformFromAudioFile(filePath)
-        Log.d("extracted amps", amps.toString())
-        uploadFileToFirestore(Uri.parse(uri), amps)
-        Log.d("voice", "Recording saved to $filePath")
-    }
-
-    fun uploadFileToFirestore(fileUri: Uri, amps: List<Float>) {
-        Log.d("fikeUri", fileUri.toString())
-        val storageReference = FirebaseStorage.getInstance().reference
-
-        val fileReference = storageReference.child("VoiceMessages/voice_message_${System.currentTimeMillis()}.m4a")
-
-        fileReference.putFile(fileUri)
-            .addOnSuccessListener { taskSnapshot ->
-                fileReference.downloadUrl.addOnSuccessListener { uri ->
-                    Log.d("FirebaseStorage", "File uploaded successfully. URL: $uri")
-                    sendMessage("audio", uri.toString(), amps)
-                }
-            }
-            .addOnFailureListener { e ->
-                Log.e("error", e.toString())
-            }
+        sendMessage("audio")
     }
 
     fun extractWaveformFromAudioFile(filePath: String): List<Float> {
@@ -295,7 +298,6 @@ class TargetUserFragment : Fragment(){
 
                 // Calculate the average amplitude from the sample data
                 val amplitude = byteArray.map {
-                    Log.d("ampByte", it.toString())
                     abs(it.toFloat()) / Byte.MAX_VALUE
                 }.average()
                 amplitudes.add(amplitude.toFloat())
@@ -319,11 +321,50 @@ class TargetUserFragment : Fragment(){
                         .scaleY(scale)
                         .setDuration(100)
                         .start()
+                    binding.voiceMsgBtn.bringToFront()
 
                     handler.postDelayed(this, 100)
                 }
             }
         }
         handler.post(runnable)
+    }
+
+    fun setStatusAndTime(lastSeen: String?, status: String?, statusView: TextView) {
+        val currentUTC = System.currentTimeMillis()
+        if (status == "online") {
+            statusView.text = "online"
+        } else if (lastSeen?.toLong() != null) {
+            val timeDifference = currentUTC - lastSeen.toLong()
+            val minutesAgo = timeDifference / (1000 * 60)
+            val hoursAgo = timeDifference / (1000 * 60 * 60)
+            if (minutesAgo < 60) {
+                statusView.text = "${minutesAgo} ago"
+            } else if (hoursAgo < 24) {
+                statusView.text = "${hoursAgo} ago"
+            }
+        }
+    }
+
+    fun generateConId(str1: String, str2: String): String {
+        val myString = str1 + str2
+        val conversationId = myString.toList().sorted().joinToString("")
+        return conversationId
+    }
+
+    fun updateMessages() {
+        targetUserViewModel.fetchMessages(generateConId(target?.id!!, GlobalVariables.host?.id!!), requireContext())
+        val plopUri = Uri.parse("android.resource://${requireContext().packageName}/raw/plop")
+        player = MediaPlayer.create(context, plopUri)
+        player?.start()
+    }
+
+    fun pickFile() {
+        filePickerLauncher.launch(arrayOf("*/*"))
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        startActivityForResult(intent, REQUEST_CODE_OPEN_DOCUMENT)
     }
 }

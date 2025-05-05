@@ -6,34 +6,31 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.media.Image
 import android.net.Uri
 import android.os.Build
-import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import android.util.Log
 import android.widget.RemoteViews
 import androidx.lifecycle.ViewModelProvider
-import com.auth0.android.request.RequestOptions
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.FutureTarget
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.example.chaqmoq.repos.SocketRepository
-import com.example.chaqmoq.ui.home.HomeViewModel
+import com.example.chaqmoq.ui.chat.ChatViewModel
 import org.json.JSONObject
 
 class FirebaseMessagingService : FirebaseMessagingService() {
     private val channelId = "your_channel_id" // Define your channel ID
     private val channelName = "FCM Notifications" // Define your channel name
     private var incomingCallAlert: IncomingCallAlert? = null
-    private lateinit var homeViewModel: HomeViewModel
+    private lateinit var homeViewModel: ChatViewModel
     var image: Uri? = null
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
         incomingCallAlert = IncomingCallAlert()
-        homeViewModel = ViewModelProvider.AndroidViewModelFactory(application).create(HomeViewModel::class.java)
+        homeViewModel = ViewModelProvider.AndroidViewModelFactory(application).create(ChatViewModel::class.java)
         if (remoteMessage.data.isNotEmpty()) {
             val title = remoteMessage.data["title"] ?: "Default Title"
             val body = remoteMessage.data["body"]
@@ -52,8 +49,6 @@ class FirebaseMessagingService : FirebaseMessagingService() {
                 incomingCallAlert?.showWindow(this, sender, image, callType, null)
             } else if (image !== null && title !== "incoming") {
                 showNotification(title, body!!, imageUrl.toString())
-            } else {
-
             }
         }
     }

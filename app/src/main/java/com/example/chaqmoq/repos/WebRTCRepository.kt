@@ -29,7 +29,6 @@ object WebRTCRepository {
 
     var onPCclosed: (() -> Unit)? = null
 
-
     fun initializePeerConnectionFactory(context: Context) {
 
         initializeEglBase()

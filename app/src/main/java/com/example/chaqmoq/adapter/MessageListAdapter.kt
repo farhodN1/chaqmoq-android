@@ -2,6 +2,7 @@ package com.example.chaqmoq.adapter
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.Uri
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -20,15 +21,15 @@ import com.example.chaqmoq.databinding.MessageItemBinding
 import com.example.chaqmoq.model.Message
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import org.threeten.bp.Instant
-import org.threeten.bp.LocalDateTime
-import org.threeten.bp.ZoneId
-import org.threeten.bp.format.DateTimeFormatter
 import android.os.Handler
 import android.os.Looper
+import com.example.chaqmoq.model.User
+import com.example.chaqmoq.utils.Firebase.downloadFileFromFirestore
+import com.example.chaqmoq.utils.GlobalVariables
 import com.example.news.utils.DateTimeUtils.getRelativeTime
+import java.net.URLDecoder
 
-class MessageListAdapter(private val userData: SharedPreferences, private val context: Context) :
+class MessageListAdapter(private val userData: User, private val context: Context) :
     ListAdapter<Message, MessageListAdapter.MessageViewHolder>(MessageDiffCallback()) {
     private lateinit var recyclerView: RecyclerView
 
@@ -59,20 +60,18 @@ class MessageListAdapter(private val userData: SharedPreferences, private val co
         RecyclerView.ViewHolder(binding.root) {
 
         private var exoPlayer: ExoPlayer? = null
-        fun bind(message: Message, userData: SharedPreferences) {
-            val hostId = userData.getString("nickname", null)
-            val localZoneId = ZoneId.systemDefault()
-            Log.d("check m type", message.message_type.toString())
+        fun bind(message: Message, user: User) {
             if (message.message_type == "audio") {
                 binding.messageBlock.visibility = View.GONE
+                binding.fileMessageBlock.visibility = View.GONE
                 binding.voiceMessageBlock.visibility = View.VISIBLE
-                binding.voiceSendTime.text = getRelativeTime(message.send_time)
+                if (message.send_time !== null ) binding.voiceSendTime.text = getRelativeTime(message.send_time)
                 val params = binding.voiceMessageBlock.layoutParams as LinearLayout.LayoutParams
-                if (message.sender_id == hostId) {
-                    params.gravity = Gravity.START
+                if (message.sender_id == user.id) {
+                    params.gravity = Gravity.END
                     binding.messageBlock.background = ContextCompat.getDrawable(context, R.drawable.background_send_message)
                 } else {
-                    params.gravity = Gravity.END
+                    params.gravity = Gravity.START
                     binding.messageBlock.background = ContextCompat.getDrawable(context, R.drawable.background_receive_message)
                 }
                 if (message.amplitudes !== null && message.amplitudes !== "") {
@@ -83,7 +82,6 @@ class MessageListAdapter(private val userData: SharedPreferences, private val co
                     exoPlayer?.release()
 
                     exoPlayer = ExoPlayer.Builder(context).build().also { player ->
-                        Log.d("hi", message.message)
                         val mediaItem = MediaItem.fromUri(message.message)
                         player.setMediaItem(mediaItem)
                         player.prepare()
@@ -125,6 +123,7 @@ class MessageListAdapter(private val userData: SharedPreferences, private val co
             }
             else if (message.message_type == "text") {
                 binding.messageBlock.visibility = View.VISIBLE
+                binding.fileMessageBlock.visibility = View.GONE
                 binding.voiceMessageBlock.visibility = View.GONE
                 if (message.send_time != null) {
                     val time = getRelativeTime(message.send_time)
@@ -134,11 +133,14 @@ class MessageListAdapter(private val userData: SharedPreferences, private val co
                     binding.messageText.text = message.message
 
                     val params = binding.messageBlock.layoutParams as LinearLayout.LayoutParams
-                    if (message.sender_id == hostId) {
-                        params.gravity = Gravity.START
-                        binding.messageBlock.background = ContextCompat.getDrawable(context, R.drawable.background_send_message)
-                    } else {
+                    if (message.sender_id == user.id) {
                         params.gravity = Gravity.END
+                        binding.messageBlock.background = ContextCompat.getDrawable(context, R.drawable.background_send_message)
+                        binding.sendTime.setTextColor(ContextCompat.getColor(context, R.color.white))
+                        binding.messageText.setTextColor(ContextCompat.getColor(context, R.color.white))
+
+                    } else {
+                        params.gravity = Gravity.START
                         binding.messageBlock.background = ContextCompat.getDrawable(context, R.drawable.background_receive_message)
                     }
                     binding.messageText.layoutParams = params
@@ -146,8 +148,50 @@ class MessageListAdapter(private val userData: SharedPreferences, private val co
                     binding.executePendingBindings()
                 }
             }
+            else if (message.message_type == "file") {
+                binding.messageBlock.visibility = View.GONE
+                binding.voiceMessageBlock.visibility = View.GONE
+                binding.fileMessageBlock.visibility = View.VISIBLE
+                if (message.send_time != null) {
+                    val time = getRelativeTime(message.send_time)
 
+                    binding.sendTime.text = time
 
+                    binding.fileName.text = extractFileName(message.message)
+
+                    val params = binding.messageBlock.layoutParams as LinearLayout.LayoutParams
+                    if (message.sender_id == user.id) {
+                        params.gravity = Gravity.END
+                        binding.messageBlock.background = ContextCompat.getDrawable(context, R.drawable.background_send_message)
+                        binding.sendTime.setTextColor(ContextCompat.getColor(context, R.color.white))
+                        binding.messageText.setTextColor(ContextCompat.getColor(context, R.color.white))
+                    } else {
+                        params.gravity = Gravity.START
+                        binding.messageBlock.background = ContextCompat.getDrawable(context, R.drawable.background_receive_message)
+                    }
+                    binding.messageText.layoutParams = params
+                    binding.downloadBtn.setOnClickListener {
+                        downloadFileFromFirestore(Uri.parse(message.message))
+                    }
+                    binding.executePendingBindings()
+                }
+
+            }
+
+        }
+
+        fun extractFileName(url: String): String? {
+            val uri = Uri.parse(url)
+            val encodedPath = uri.getQueryParameter("alt")
+
+            val fullPath = uri.getQueryParameter("o") ?: uri.path?.substringAfter("/o/")?.substringBefore("?")
+
+            fullPath?.let {
+                val decodedPath = URLDecoder.decode(it, "UTF-8")
+                return decodedPath.substringAfterLast('/')
+            }
+
+            return null
         }
 
     }
@@ -161,7 +205,6 @@ class MessageListAdapter(private val userData: SharedPreferences, private val co
             return oldItem == newItem
         }
     }
-
 
 }
 
