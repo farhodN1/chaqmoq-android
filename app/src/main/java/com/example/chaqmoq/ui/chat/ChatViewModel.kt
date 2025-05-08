@@ -29,10 +29,10 @@ class ChatViewModel : ViewModel() {
                 _userList.postValue(userList)
             } catch (e: JSONException) {
                 _userList.postValue(getAllUsers())
-                Log.e("log", "JSON Error: ${e.message}")
+                Log.e("NetworkError", "JSON Error: ${e.message}")
             } catch (e: Exception) {
                 _userList.postValue(getAllUsers())
-                Log.e("log", "Error: ${e.message}")
+                Log.e("NetworkError", "Error: ${e.message}")
             }
         }
     }

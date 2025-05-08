@@ -53,13 +53,15 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         appContext = this
         val userInfo = getSharedPreferences("UserInfo", Context.MODE_PRIVATE)
+        val isLoggedIn: Boolean = userInfo.getBoolean("isLoggedIn", false)
+        if (!isLoggedIn) {
+            redirect()
+        }
         userId = userInfo.getString("id", "")
         val userName = userInfo.getString("username", "")
         val userEmail = userInfo.getString("email", "")
         val userProfilePicture = userInfo.getString("pictureURL", "")
-        Log.d("userId", userId!!)
         host = User(userId!!, userName!!, userEmail, userProfilePicture, null, null, null)
-        redirect()
         AndroidThreeTen.init(this)
         socket.connect()
         networkReceiver = NetworkReceiver()
@@ -89,15 +91,13 @@ class MainActivity : AppCompatActivity() {
             navController.navigate(R.id.nav_call, bundle)
         }
 
-
         val intent = Intent(
             Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
             Uri.parse("package:$packageName")
         )
         startActivity(intent)
 
-
-        val redirToTarget = intent.getStringExtra("url") ?: null
+        val redirToTarget = intent.getStringExtra("url")
         if (redirToTarget !== null) {
             homeViewModel?.userList?.observe(this) {
                 goToTargetUser("https://lh3.googleusercontent.com/a/ACg8ocJOHyhKnjI8sULVur_PATMGYCYPwL8ou_F-BaPa9KT2-G9JIQ=s96-c")
@@ -111,11 +111,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun redirect() {
-        val isLoggedIn: Boolean = getSharedPreferences("UserInfo", Context.MODE_PRIVATE).getBoolean("isLoggedIn", false)
-        if (!isLoggedIn) {
-            val intent = Intent(this, AuthorizationActivity::class.java)
-            startActivity(intent)
-        }
+        val intent = Intent(this, AuthorizationActivity::class.java)
+        startActivity(intent)
     }
 
     private fun setupNavigation() {
@@ -213,8 +210,8 @@ class MainActivity : AppCompatActivity() {
                 val data = JSONObject(msg[0].toString())
                 val sender = data.optString("sender")
                 val image = data.optString("image")
-                Log.d("socket", "call ${sender}")
                 callMaker = sender
+                Log.d("socket", "call ${sender}")
                 runOnMainThread{
                     incomingCallAlert.showWindow(this, sender, image, "video", navController)
                 }

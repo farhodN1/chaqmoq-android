@@ -48,9 +48,7 @@ object SocketRepository {
                         override fun onCreateSuccess(p0: SessionDescription?) {}
                         override fun onSetSuccess() {
                             Log.d("RTC", "Remote offer set successfully")
-                            if (host?.id !== null && target?.id !== null) {
-                                WebRTCRepository.createAnswer(host!!.id, target!!.id)
-                            }
+                            WebRTCRepository.createAnswer()
                         }
                         override fun onCreateFailure(p0: String?) {
                             Log.e("offer", "error on oncreatefailure: ${p0}")
@@ -66,29 +64,29 @@ object SocketRepository {
         }
 
         socket.on("answer") { args ->
+            Log.d("the answer","data ${args[0]})")
             if (args != null && args.isNotEmpty()) {
                 val data = args[0].toString()
-                Log.d("the answer","data ${args[0]})")
-                    val answer = SessionDescription(SessionDescription.Type.ANSWER, data)
-                    Log.d("ready", answer.toString())
-                    Log.d("signaling state", WebRTCRepository.peerConnection.signalingState().toString())
-                    if (WebRTCRepository.peerConnection.signalingState() == PeerConnection.SignalingState.HAVE_LOCAL_OFFER) {
-                        WebRTCRepository.peerConnection.setRemoteDescription(object : SdpObserver {
-                            override fun onCreateSuccess(p0: SessionDescription?) {}
-                            override fun onSetSuccess() {
-                                Log.d("RTC", "Remote answer set successfully")
-                                if (host?.id !== null && target?.id !== null) {
-                                    WebRTCRepository.createAnswer(host!!.id, target!!.id)
-                                }
+                val answer = SessionDescription(SessionDescription.Type.ANSWER, data)
+                Log.d("ready", answer.toString())
+                Log.d("signaling state", WebRTCRepository.peerConnection.signalingState().toString())
+                if (WebRTCRepository.peerConnection.signalingState() == PeerConnection.SignalingState.HAVE_LOCAL_OFFER) {
+                    WebRTCRepository.peerConnection.setRemoteDescription(object : SdpObserver {
+                        override fun onCreateSuccess(p0: SessionDescription?) {}
+                        override fun onSetSuccess() {
+                            Log.d("RTC", "Remote answer set successfully")
+                            if (host?.id !== null && target?.id !== null) {
+                                WebRTCRepository.createAnswer()
                             }
-                            override fun onCreateFailure(p0: String?) {
-                                Log.e("answer", "error on oncreatefailure: ${p0}")
-                            }
-                            override fun onSetFailure(p0: String?) {
-                                Log.e("answer", "Remote answer setting failed: $p0")
-                            }
-                        }, answer)
-                    }
+                        }
+                        override fun onCreateFailure(p0: String?) {
+                            Log.e("answer", "error on oncreatefailure: ${p0}")
+                        }
+                        override fun onSetFailure(p0: String?) {
+                            Log.e("answer", "Remote answer setting failed: $p0")
+                        }
+                    }, answer)
+                }
             } else {
                 Log.e("answer", "Received invalid data")
             }

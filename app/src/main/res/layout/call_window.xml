@@ -8,7 +8,7 @@
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:visibility="gone"
+        android:visibility="visible"
         android:id="@+id/ongoingCall">
         <LinearLayout
             android:id="@+id/callInfo"
@@ -177,16 +177,6 @@
                 android:background="@drawable/circle_background"
                 app:backgroundTint="@color/cardview_dark_background"
                 app:srcCompat="@drawable/ic_baseline_videocam_24" />
-<!--            <ImageButton-->
-<!--                android:id="@+id/video_button"-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:src="@drawable/ic_baseline_videocam_24"-->
-<!--                android:background="@drawable/circle_background"-->
-<!--                android:minWidth="48dp"-->
-<!--                android:minHeight="48dp"-->
-<!--                android:contentDescription="no speakable text"-->
-<!--                app:backgroundTint="@color/cardview_dark_background"/>-->
             <ImageView
                 android:id="@+id/end_call_button"
                 android:layout_width="wrap_content"

@@ -81,6 +81,8 @@ class TargetUserFragment : Fragment(){
     ): View {
         _binding = TargetUserBinding.inflate(inflater, container, false)
         targetUserViewModel = ViewModelProvider(this).get(TargetUserViewModel::class.java)
+        Log.d("targetId", target?.id.toString())
+        Log.d("hostId", GlobalVariables.host?.id.toString())
         targetUserViewModel.fetchMessages(generateConId(target?.id!!, GlobalVariables.host?.id!!), requireContext())
         val root: View = binding.root
         val recyclerView: RecyclerView = binding.recyclerView

@@ -2,7 +2,11 @@ package com.example.chaqmoq.repos
 
 import android.content.Context
 import android.media.AudioManager
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.Looper
 import android.util.Log
+import com.example.chaqmoq.utils.GlobalVariables.callMaker
 import org.json.JSONObject
 import org.webrtc.*
 
@@ -142,7 +146,6 @@ object WebRTCRepository {
     }
 
     fun createOffer(hostId: String, targetId: String){
-
         peerConnection.createOffer(object : SdpObserver {
             override fun onCreateSuccess(desc: SessionDescription?) {
                 peerConnection.setLocalDescription(object : SdpObserver {
@@ -179,7 +182,7 @@ object WebRTCRepository {
         }, MediaConstraints())
     }
 
-    fun createAnswer(hostId: String, targetId: String) {
+    fun createAnswer() {
         val constraints = MediaConstraints()
         constraints.mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
 
@@ -192,8 +195,7 @@ object WebRTCRepository {
                     override fun onSetSuccess() {
                         val json = JSONObject()
                         json.put("sdp", desc?.description)
-                        json.put("sender", hostId)
-                        json.put("receiver", targetId)
+                        json.put("receiver", callMaker)
 
                         Log.d("RTC", "emitting answer")
                         SocketRepository.socket.emit("answer", json)
@@ -256,49 +258,39 @@ object WebRTCRepository {
     }
 
     fun endPeerConnection(localView: SurfaceViewRenderer) {
-        // Check if peerConnection is initialized
         if (!::peerConnection.isInitialized) {
             Log.e("WebRTC", "peerConnection is not initialized.")
             return
         }
 
-        // Avoid multiple invocations
         if (peerConnection.iceConnectionState() == PeerConnection.IceConnectionState.CLOSED) {
             Log.d("WebRTC", "Peer connection already closed.")
             return
         }
 
-        // Stop the video capture (if initialized)
         videoCapturer?.let {
             try {
-                it.stopCapture()  // Stop the camera capture
+                it.stopCapture()
             } catch (e: InterruptedException) {
                 e.printStackTrace()
             }
-            it.dispose()  // Release resources
-            videoCapturer = null  // Clear reference
+            it.dispose()
+            videoCapturer = null
         }
 
-        // Stop the video track
         localVideoTrack?.setEnabled(false) // Disable the video track
         localVideoTrack?.removeSink(localView) // Remove the video sink
 
-        // Mute the audio track
         localAudioTrack?.setEnabled(false) // Mute the audio track
 
-        // Close the PeerConnection
         peerConnection.close()
         peerConnection.dispose()
-
         localAudioSource?.dispose()
         localVideoSource?.dispose()
 
-        // Clear references to media tracks
         localAudioTrack = null
         localVideoTrack = null
 
-
-        // Dispose of the PeerConnectionFactory and EGL base
         factory.dispose() // Clear resources
         localView.release()
 

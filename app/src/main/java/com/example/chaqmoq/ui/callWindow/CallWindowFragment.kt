@@ -12,29 +12,28 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.example.chaqmoq.IncomingCallAlert
 import com.example.chaqmoq.R
 import com.example.chaqmoq.databinding.CallWindowBinding
 import com.example.chaqmoq.repos.SocketRepository
 import com.example.chaqmoq.repos.WebRTCRepository
+import com.example.chaqmoq.utils.GlobalVariables
+import com.example.chaqmoq.utils.GlobalVariables.target
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.json.JSONObject
-import com.example.chaqmoq.utils.GlobalVariables.callMaker
 
 class CallWindowFragment : Fragment() {
 
     private var _binding: CallWindowBinding? = null
     private val binding get() = _binding!!
     private var player: MediaPlayer? = null
-
-    private val hostData: SharedPreferences by lazy {
-        requireActivity().getSharedPreferences("UserInfo", Context.MODE_PRIVATE)
-    }
-    private val targetData: SharedPreferences by lazy {
-        requireActivity().getSharedPreferences("TargetInfo", Context.MODE_PRIVATE)
-    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -47,9 +46,6 @@ class CallWindowFragment : Fragment() {
         WebRTCRepository.initializePeerConnectionFactory(requireContext())
         val incoming = arguments?.getBoolean("incoming") ?: false
         val callType = arguments?.getString("callType")
-        val hostId = hostData.getString("nickname", null)
-        val targetId = targetData.getString("id", null)
-        val targetUserName = targetData.getString("givenName", "Unknown")
         if (callType == "video") {
             WebRTCRepository.initializePeerConnection(requireContext(), binding.remoteView, binding.localView, false)
         } else {
@@ -58,22 +54,21 @@ class CallWindowFragment : Fragment() {
         if (callType == "video") {
             if (!incoming) {
                 SocketRepository.socket.emit("videoCall", JSONObject().apply {
-                    put("sender", hostId)
-                    put("recipient", targetId)
+                    put("sender", GlobalVariables.host?.id)
+                    put("recipient", target?.id)
                 })
             }
-
             binding.remoteViewLoading.visibility = View.GONE
             binding.ongoingCall.visibility = View.GONE
             binding.callLayout.visibility = View.VISIBLE
             binding.noAnswer.visibility = View.GONE
-            binding.userNameInVideo.text = targetUserName
+            binding.userNameInVideo.text = target?.username
 
         } else if (callType == "audio") {
             if (!incoming) {
                 SocketRepository.socket.emit("audioCall", JSONObject().apply {
-                    put("sender", hostId)
-                    put("recipient", targetId)
+                    put("sender", GlobalVariables.host?.id)
+                    put("recipient", target?.id)
                 })
             }
             binding.callLayout.visibility = View.GONE
@@ -95,11 +90,10 @@ class CallWindowFragment : Fragment() {
                 }
             }
         }
-
-        val senderId = callMaker
-        if (incoming && senderId !== null) {
+        Log.d("host_id", GlobalVariables.host?.id.toString())
+        if (incoming && GlobalVariables.host?.id !== null) {
             SocketRepository.socket.emit("respond", JSONObject().apply {
-                put("sender", senderId)
+                put("sender", GlobalVariables.host?.id)
                 put("answer", true)
             })
             handler.post(runnable)
@@ -111,8 +105,8 @@ class CallWindowFragment : Fragment() {
                 if (args.isNotEmpty()) {
                     when (val msg = args[0]) {
                         is Boolean -> {
-                            if (msg && hostId !== null && targetId !== null) {
-                                WebRTCRepository.createOffer(hostId, targetId)
+                            if (msg && GlobalVariables.host?.id !== null && target?.id !== null) {
+                                WebRTCRepository.createOffer(GlobalVariables.host?.id!!, target?.id!!)
                                 handler.post(runnable)
                             } else {
                                 Log.e("msg", "Message is false")
@@ -130,44 +124,30 @@ class CallWindowFragment : Fragment() {
 
         binding.endCallButton.setOnClickListener {
             stopRingtone()
-            WebRTCRepository.endPeerConnection(binding.localView)
             SocketRepository.socket.emit("endCall", JSONObject().apply {
-                put("sender", hostId)
-                put("recipient", targetId)
+                put("sender", GlobalVariables.host?.id)
+                put("recipient", target?.id)
             })
             findNavController().popBackStack()
+            lifecycleScope.launch {
+                WebRTCRepository.endPeerConnection(binding.localView)
+            }
         }
 
         binding.handUp.setOnClickListener {
-            WebRTCRepository.endPeerConnection(binding.localView)
-            Log.d("error", "hostId: $hostId, targetId: $targetId")
             SocketRepository.socket.emit("endCall", JSONObject().apply {
-                put("sender", hostId)
-                put("recipient", targetId)
+                put("sender", GlobalVariables.host?.id)
+                put("recipient", target?.id)
             })
             findNavController().popBackStack()
+            lifecycleScope.launch {
+                WebRTCRepository.endPeerConnection(binding.localView)
+            }
         }
 
         binding.xBtn.setOnClickListener {
             findNavController().popBackStack()
         }
-
-//        binding.retryBtn.setOnClickListener {
-//            val bundle = Bundle().apply {
-//                putBoolean("incoming", false)
-//            }
-//
-//            if (callType == "video") {
-//                bundle.putString("callType", "video")
-//            } else if (callType == "audio call") {
-//                bundle.putString("callType", "audio")
-//            }
-//
-//            findNavController().popBackStack()
-//            Log.d("navigation", "pop back stack")
-//            findNavController().navigate(R.id.nav_call, bundle)
-//            Log.d("navigation", "navigate to nav call")
-//        }
 
         binding.muteButton.setOnClickListener {
             WebRTCRepository.toggleMuteAudio()
@@ -236,17 +216,17 @@ class CallWindowFragment : Fragment() {
     }
 
     fun endCall() {
-        if (_binding !== null) {
-            WebRTCRepository.endPeerConnection(binding.localView)
-            stopRingtone()
-            val inTargetUser: Boolean = findNavController().currentDestination?.id == R.id.target_user
-            if (!inTargetUser) {
-                Handler(Looper.getMainLooper()).post {
-                    findNavController().navigate(R.id.target_user)
+        CoroutineScope(Dispatchers.Main).launch {
+            if (_binding !== null) {
+                stopRingtone()
+                findNavController().popBackStack()
+                lifecycleScope.launch {
+                    WebRTCRepository.endPeerConnection(binding.localView)
                 }
-            }
 
+            }
         }
+
     }
 
     private fun stopRingtone() {
